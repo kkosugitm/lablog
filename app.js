@@ -313,7 +313,12 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
         <div class="scroll">${recentHTML(day)}</div>
       </section>
       <section class="card span-2">
-        <div class="card-head"><h2>閲覧したページ</h2><span class="sub">Chrome・Edge ${day.web_total} 件</span></div>
+        <div class="card-head"><h2>画面から読み取った文字</h2><span class="sub">日報の材料（この PC の中だけ・数日で消えます）</span></div>
+        <div class="scroll">${screenTextsHTML(day)}</div>
+      </section>
+      <section class="card span-2">
+        <div class="card-head"><h2>閲覧したページ</h2><span class="sub">Chrome・Edge ${day.web_total} 件${day.web_hidden
+          ? `（画面に表示しなかったタブ ${day.web_hidden} 件は除いています）` : ""}</span></div>
         <div class="scroll">${webHTML(day, names)}</div>
       </section>`}
     </div>`;
@@ -510,6 +515,20 @@ function recentHTML(day) {
   return `<div class="list">${day.recent.map((r) => `
     <div class="list-item" ${tipAttr(esc(r.path))}><span class="main">${esc(r.name)}</span>
     <span class="side">${fmtHMDay(r.ts, day.range[0])}</span></div>`).join("")}</div>`;
+}
+
+function screenTextsHTML(day) {
+  const texts = day.screen_texts || [];
+  if (!texts.length) {
+    const on = state.settings && state.settings.settings.screen_text.enabled;
+    return `<div class="empty">${on ? "この日の読み取り結果はありません（残す日数を過ぎたものは消えています）。"
+      : `読み取りはオフです。<a href="#/settings">設定</a>の「ウィンドウ名から分からない作業」で変えられます。`}</div>`;
+  }
+  return texts.map((t) => `
+    <details class="group">
+      <summary><span class="name">${fmtHMDay(t.ts, day.range[0])}　${esc(t.app)}</span><span class="side muted num">${t.text.length} 文字</span></summary>
+      <div class="inner screen-text">${esc(t.text)}</div>
+    </details>`).join("");
 }
 
 function webHTML(day, names) {
@@ -841,6 +860,28 @@ async function renderSettings() {
       </section>
 
       <section class="card">
+        <div class="card-head"><h2>ウィンドウ名から分からない作業</h2></div>
+        <form id="insight-form">
+          <label class="check"><input type="checkbox" name="claude" ${s.claude_code.enabled ? "checked" : ""}> Claude Code の会話の題名と作業フォルダを記録する</label>
+          <p class="help">ウィンドウ名が「Claude」だけのときに、そのとき使っていた会話の題名で補います。会話の中身は記録しません。</p>
+          <label class="check"><input type="checkbox" name="ocr" ${s.screen_text.enabled ? "checked" : ""}> 下のアプリが前面にあるとき、画面の文字を読み取って日報の材料にする</label>
+          <label class="field" style="margin-top:8px"><span>対象のアプリ（実行ファイル名を 1 行に 1 つ）</span>
+            <textarea name="apps" rows="3">${esc(s.screen_text.apps.join("\n"))}</textarea></label>
+          <div class="row">
+            <label class="field"><span>読み取る間隔（分）</span><input type="number" name="interval" min="1" max="60" step="1" value="${s.screen_text.interval_min}" style="width:7em"></label>
+            <label class="field"><span>読み取った文字を残す日数</span><input type="number" name="keep" min="1" max="30" step="1" value="${s.screen_text.keep_days}" style="width:7em"></label>
+          </div>
+          <p class="help">撮るのは対象アプリのウィンドウだけで、画像は保存しません（すぐ文字にして捨てます）。文字はこの PC の中だけに置いて日報の材料にし、残す日数を過ぎたら消します。OneDrive には書き出しません。一時停止中・記録しないアプリ・2 分以上操作していないときは読み取りません。</p>
+          <div class="row">
+            <span class="help">いま残っている読み取り結果：${state.settings.screen_text_count} 件</span>
+            <button class="btn btn-sm" type="button" id="ocr-clear" ${state.settings.screen_text_count ? "" : "disabled"}>すべて消す</button>
+            <span class="spacer"></span>
+            <button class="btn btn-primary" type="submit">保存</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card">
         <div class="card-head"><h2>判定のしかた</h2></div>
         <form id="judge-form">
           <label class="field"><span>離席とみなす時間（操作がない分数）</span>
@@ -957,6 +998,19 @@ async function renderSettings() {
   $("#ollama-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (await saveSettings({ ollama: { url: s.ollama.url, model: e.target.model.value, auto: e.target.auto.checked } })) renderSettings();
+  });
+  $("#insight-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (await saveSettings({ claude_code: { enabled: f.claude.checked },
+      screen_text: { enabled: f.ocr.checked, apps: lines(f.apps.value), interval_min: Number(f.interval.value),
+                     keep_days: Number(f.keep.value) } })) renderSettings();
+  });
+  $("#ocr-clear").addEventListener("click", async () => {
+    if (!confirm("画面から読み取った文字をすべて消します。日報の材料からもなくなります。よろしいですか？")) return;
+    await api.post("/api/screen_texts/clear");
+    flash("読み取った文字を消しました");
+    renderSettings();
   });
   $("#judge-form").addEventListener("submit", (e) => {
     e.preventDefault();

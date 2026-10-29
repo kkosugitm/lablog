@@ -249,6 +249,7 @@ details.group > summary .name { flex: 1; min-width: 0; font-weight: 600; overflo
 details.group .inner { padding: 0 0 8px 18px; }
 details.group .inner .list-item { font-size: 13px; padding: 4px 0; border-bottom-style: dashed; }
 .scroll { max-height: 420px; overflow: auto; padding-right: 4px; }
+.screen-text { white-space: pre-wrap; font-size: 12.5px; color: var(--ink-2); line-height: 1.6; }
 
 /* ---- 月 ---- */
 .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
