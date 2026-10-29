@@ -14,7 +14,8 @@ window.LabLogCloud = (() => {
   const SCOPE = "Files.ReadWrite.AppFolder offline_access";
   const HERE = location.origin + location.pathname;
   const KEY = { token: "lablog.token", login: "lablog.login", silent: "lablog.silent", pending: "lablog.pending",
-                cache: "lablog.cache:", cacheIndex: "lablog.cache-index" };
+                cache: "lablog.cache:", cacheIndex: "lablog.cache-index", marker: "lablog.marker" };
+  const MARKER = { app: "LabLog viewer" }; // PC の LabLog はこの中身の viewer.json を目印に書き出し先を探す
   const CACHE_SEC = 60;
   const CACHE_FILES = 80;
   const DAY_START_HOUR = 5;
@@ -129,31 +130,48 @@ window.LabLogCloud = (() => {
 
   // ---- OneDrive のアプリフォルダ（開発中は PC 内のテスト用サーバー）
 
+  async function graphError(res, what) {
+    const body = await res.json().catch(() => ({}));
+    const detail = body.error ? `${body.error.code}: ${body.error.message}` : res.statusText;
+    return new Error(`OneDrive ${what}（${res.status} ${detail}）`);
+  }
+
   const graphStore = {
+    // アプリフォルダは、フォルダそのものを一度読んだときに OneDrive が作る（無いまま中に書くと 404 になる）
+    async ensureRoot() {
+      const res = await graph("");
+      if (!res.ok) throw await graphError(res, "のアプリフォルダを用意できませんでした");
+    },
     async read(path) {
       const res = await graph(`:/${path}`);
       if (res.status === 404) return null;
-      if (!res.ok) throw new Error(`OneDrive から読み込めませんでした（${res.status}）`);
+      if (!res.ok) throw await graphError(res, "から読み込めませんでした");
       // ファイルの中身は、認証なしで読める一時的な URL から取る（JavaScript からはこの方法が必要）
       const file = await fetch((await res.json())["@microsoft.graph.downloadUrl"], { cache: "no-store" });
       if (!file.ok) throw new Error(`OneDrive から読み込めませんでした（${file.status}）`);
       return file.json();
     },
     async write(path, obj) {
-      const res = await graph(`:/${path}:/content`, {
+      const put = () => graph(`:/${path}:/content`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(obj),
       });
-      if (!res.ok) throw new Error(`OneDrive に保存できませんでした（${res.status}）`);
+      let res = await put();
+      if (res.status === 404) { // アプリフォルダがまだ無い
+        await graphStore.ensureRoot();
+        res = await put();
+      }
+      if (!res.ok) throw await graphError(res, "に保存できませんでした");
     },
     async list(dir) {
       const res = await graph(`:/${dir}:/children?$select=name&$top=500`);
       if (res.status === 404) return [];
-      if (!res.ok) throw new Error(`OneDrive から読み込めませんでした（${res.status}）`);
+      if (!res.ok) throw await graphError(res, "から読み込めませんでした");
       return (await res.json()).value.map((x) => x.name);
     },
   };
 
   const devStore = {
+    async ensureRoot() {},
     async read(path) {
       const res = await fetch(cfg.dev + path, { cache: "no-store" });
       if (res.status === 404) return null;
@@ -346,15 +364,24 @@ window.LabLogCloud = (() => {
     if (cfg.dev) return { signedIn: true };
     if (!cfg.clientId) return { signedIn: false, error: "ビューアーの準備（Microsoft へのアプリ登録）がまだ終わっていません。" };
     try {
-      if (await finishSignIn()) {
-        // 初めて使うときは、ここで OneDrive にアプリ専用フォルダができる。PC はこの目印を探して書き出し先にする
-        await store.write("viewer.json", { app: "LabLog viewer", signed_in: Date.now() / 1000 });
-      }
+      await finishSignIn();
     } catch (e) {
       return { signedIn: false, error: e.message };
     }
     const tok = load(KEY.token);
-    return { signedIn: !!(tok && (tok.access || tok.refresh)) || (!!tok && Date.now() - (load(KEY.silent) || 0) > 10 * 60 * 1000) };
+    const signedIn = !!(tok && (tok.access || tok.refresh)) || (!!tok && Date.now() - (load(KEY.silent) || 0) > 10 * 60 * 1000);
+    if (signedIn && !load(KEY.marker)) {
+      // 初めて使うときは、ここで OneDrive にアプリ専用フォルダを作り、PC が書き出し先を見つけるための目印を置く
+      try {
+        await store.ensureRoot();
+        await store.write("viewer.json", { ...MARKER, signed_in: Date.now() / 1000 });
+        save(KEY.marker, Date.now());
+      } catch (e) {
+        if (e.name === "SignInRequired") return { signedIn: false };
+        return { signedIn: false, error: e.message };
+      }
+    }
+    return { signedIn };
   }
 
   function signOut() {
