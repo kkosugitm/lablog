@@ -429,7 +429,10 @@ details.group .inner .list-item { font-size: calc(13px * var(--fs)); padding: 4p
    その日の作業時間で body[data-level] が 0〜4 に変わる（app.js の LEVEL_HOURS）。
    0 は地味なまま。1 から壁紙の光が出て、カードがすりガラスになり、4 で最も鮮やかに・ゆっくり動く。
    分類の色（タイムライン・横棒）は意味を持つので変えない。変えるのは背景とカード・タイルだけ。 */
-#wallpaper { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+/* iOS 26 の Safari・ホーム画面アプリは、画面に固定された部品の背景色で時計の帯を塗る。
+   ここが透明だと時計の帯も透明になり、下のページがぼやけて透けるので、地の色を付けておく */
+#wallpaper { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+             background-color: var(--page); }
 #wallpaper i {
   position: absolute; width: 90vmax; height: 90vmax; border-radius: 50%;
   opacity: calc(var(--w-opacity, 0) * var(--w-dim));
