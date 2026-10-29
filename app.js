@@ -128,9 +128,9 @@ function levelHTML(day) {
   const sec = effortSec(day.work_total, day.stay_total);
   const level = forcedLevel != null ? Number(forcedLevel) : levelOf(sec);
   const next = LEVEL_HOURS[level];
-  const tipHtml = `<b>この日の段階 ${level} / 4</b><div>PC作業 ${fmtDur(day.work_total)}・滞在 ${fmtDur(day.stay_total)}</div>`
-    + `<div class="muted">${next ? `あと ${fmtDur(next * HOUR - sec)} で次の段階` : "いちばん上の段階です"}</div>`;
-  return `<span class="level" ${tipAttr(tipHtml)} role="img" aria-label="この日の段階 ${level} / 4">${
+  const tipHtml = `<b>この日の熱量 ${level} / 4</b><div>PC作業 ${fmtDur(day.work_total)}・滞在 ${fmtDur(day.stay_total)}</div>`
+    + `<div class="muted">${next ? `あと ${fmtDur(next * HOUR - sec)} で熱量が上がります` : "最高の熱量です"}</div>`;
+  return `<span class="level" ${tipAttr(tipHtml)} role="img" aria-label="この日の熱量 ${level} / 4"><span class="level-name">熱量</span>${
     [0, 1, 2, 3].map((i) => `<i class="${i < level ? "on" : ""}"></i>`).join("")}</span>`;
 }
 
@@ -433,14 +433,14 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       </label>
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
       ${day.is_today ? "" : `<a class="btn" href="#/day/${today}">今日</a>`}
-      ${levelHTML(day)}
     </div>
 
-    <!-- よく見る部分（メイン）：入退室・時間のタイルと日報 -->
+    <!-- よく見る部分（メイン）：研究室の滞在と PC作業時間（1 つのタイル）、日報 -->
     <div class="main-area">
-    <div class="tiles tiles-main">
-      ${stayTileHTML(day)}
-      <div class="tile"><div class="label">PC作業時間</div>
+    <div class="tile day-tile">
+      ${levelHTML(day)}
+      <div class="day-stay">${stayHTML(day)}</div>
+      <div class="day-work"><div class="label">PC作業時間</div>
         <div class="value">${esc(fmtDur(day.work_total))}</div>
         <div class="foot">${esc(locText)}</div></div>
     </div>
@@ -522,14 +522,15 @@ const ICON_RELOAD = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12
 const ICON_STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/></svg>`;
 const ICON_PLAY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>`;
 
-function stayTileHTML(day) {
+// 研究室の滞在（日別のタイルの左側・スマホでは上側）
+function stayHTML(day) {
   const stays = day.stays, t0 = day.range[0];
   if (!stays.length) {
-    return `<div class="tile stay-tile"><div class="label">研究室</div>
+    return `<div class="label">研究室</div>
       <div class="stay-span empty">
         <span class="cap io">${ICON_IN}IN</span><span class="total muted">研究室には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
-      </div></div>`;
+      </div>`;
   }
   const first = stays[0].start, last = stays[stays.length - 1];
   const end = Math.max(...stays.map((s) => s.end));
@@ -546,7 +547,7 @@ function stayTileHTML(day) {
     : { t: fmtHMDay(last.end, t0), cls: "out", cap: "OUT" };
   const foot = last.state === "tentative" ? "仮退出から4時間以内に研究室の Wi-Fi に戻れば、滞在が続きます"
     : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（研究室の外）は滞在時間に含めません` : "";
-  return `<div class="tile stay-tile"><div class="label">研究室</div>
+  return `<div class="label">研究室</div>
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
       <span class="total">${esc(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
@@ -555,7 +556,7 @@ function stayTileHTML(day) {
       <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i></span>
       <span class="t num right ${last.state === "in" ? "now" : ""}">${esc(exit.t)}</span>
     </div>
-    ${foot ? `<div class="foot">${foot}</div>` : ""}</div>`;
+    ${foot ? `<div class="foot">${foot}</div>` : ""}`;
 }
 
 function timelineHTML(day, names) {

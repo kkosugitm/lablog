@@ -303,19 +303,25 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .detail { --surface: var(--surface-detail); }
 .main-area .tiles { margin-bottom: 0; }
 .main-area .tile { padding: 16px 18px; box-shadow: var(--lift); }
-/* 研究室のタイルは半透明にして、後ろの壁紙を透かす。点の縁取りも透明にする。
-   段階 3・4 の光る縁取りは、下に敷いた色が中まで透けてしまうので、このタイルには付けない */
-.main-area .tile.stay-tile { --surface: transparent; --glass-bg: var(--stay-glass); border-color: var(--border);
-  background: var(--stay-glass); -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5); }
+/* 研究室の滞在と PC作業時間を 1 つにまとめたタイル。PC では左右に、スマホでは上下に並べて細い線で分け、
+   右上に「熱量」を出す。半透明にして後ろの壁紙を透かす（点の縁取りも透明にする）。
+   熱量 3・4 の光る縁取りは、下に敷いた色が中まで透けてしまうので、このタイルには付けない */
+.main-area .tile.day-tile { --surface: transparent; --glass-bg: var(--stay-glass); border-color: var(--border);
+  background: var(--stay-glass); -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
+  position: relative; display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); } /* 右の列は見出しと熱量が並ぶ幅を確保 */
+.day-tile .day-work { border-left: 1px solid var(--border); margin-left: 22px; padding-left: 22px; }
+.day-tile > .level { position: absolute; top: 15px; right: 18px; }
+@media (max-width: 760px) {
+  .main-area .tile.day-tile { grid-template-columns: minmax(0, 1fr); }
+  .day-tile .day-work { border-left: 0; margin: 14px 0 0; padding: 14px 0 0; border-top: 1px solid var(--border); }
+}
 .main-area .tile .value { font-size: calc(30px * var(--fs)); }
 .main-area #report-card { padding: 16px 18px; box-shadow: var(--lift); }
 .main-area #report-card .md { font-size: calc(15px * var(--fs)); }
 @media (max-width: 760px) { .main-area .tile .value { font-size: calc(25px * var(--fs)); } }
 .section-break { border: 0; border-top: 1px solid var(--axis); margin: 36px 0 28px; }
 
-/* 大学での滞在：「入室 ●━━ 滞在時間 ━━● 退室」。塗った区間が大学にいた時間、点線は大学の外 */
-.tiles-main { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
-@media (max-width: 760px) { .tiles-main { grid-template-columns: minmax(0, 1fr); } }
+/* 研究室の滞在：「入室 ●━━ 滞在時間 ━━● 退室」。塗った区間が研究室にいた時間、点線は研究室の外 */
 .stay-span { display: grid; grid-template-columns: auto minmax(60px, 1fr) auto; column-gap: 18px; row-gap: 2px;
              align-items: center; margin-top: 8px; }
 .stay-span .cap { font-size: calc(12px * var(--fs)); color: var(--muted); align-self: end; white-space: nowrap; }
@@ -533,10 +539,11 @@ body[data-level="4"] #wallpaper i:nth-child(even) { animation-duration: 46s; ani
 }
 body[data-level]:not([data-level="0"]) .foot { color: var(--ink-2); }
 
-/* 日別の見出しの横の「今日の段階」（4 つの目盛り） */
-.level { display: inline-flex; align-items: center; gap: 3px; padding: 7px 9px; border-radius: 999px;
+/* 日別のタイルの右上の「熱量」（その日の作業量。4 つの目盛り） */
+.level { display: inline-flex; align-items: center; gap: 3px; padding: 3px 10px 3px 9px; border-radius: 999px;
          background: var(--surface-2); cursor: default; }
+.level .level-name { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--ink-2); margin-right: 5px; letter-spacing: .04em; }
 .level i { width: 14px; height: 6px; border-radius: 3px; background: var(--axis); }
 .level i.on { background: linear-gradient(90deg, #4f86ff, #a06bff); }
-.level i.on:nth-child(3) { background: linear-gradient(90deg, #a06bff, #ff5fa8); }
-.level i.on:nth-child(4) { background: linear-gradient(90deg, #ff5fa8, #ff9a3c); }
+.level i.on:nth-of-type(3) { background: linear-gradient(90deg, #a06bff, #ff5fa8); }
+.level i.on:nth-of-type(4) { background: linear-gradient(90deg, #ff5fa8, #ff9a3c); }
