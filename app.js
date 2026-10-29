@@ -314,8 +314,12 @@ function morphBar(change) {
   [barBg, ...parts].forEach(stopMotion);
   change();
   const bg1 = barBg.getBoundingClientRect();
-  barBg.animate({ top: [`${bg0.top - bg1.top}px`, "0px"], left: [`${bg0.left - bg1.left}px`, "0px"],
-                  right: [`${bg1.right - bg0.right}px`, "0px"], bottom: [`${bg1.bottom - bg0.bottom}px`, "0px"] }, BAR_MOTION);
+  // 帯は、前の位置と大きさに見せかけた状態から、移動と拡大縮小だけで新しい形へ動かす（1 コマごとの組み直しがないので滑らか）。
+  // 拡大縮小で角の丸みがゆがまないよう、丸みを逆向きに補正する
+  const sx = bg0.width / bg1.width, sy = bg0.height / bg1.height;
+  const radius = parseFloat(getComputedStyle(barBg).borderTopLeftRadius) || 0;
+  barBg.animate({ transform: [`translate(${bg0.left - bg1.left}px, ${bg0.top - bg1.top}px) scale(${sx}, ${sy})`, "none"],
+                  borderRadius: [`${radius / sx}px / ${radius / sy}px`, `${radius}px / ${radius}px`] }, BAR_MOTION);
   for (const el of parts) {
     const { rect: a, display, opacity } = before.get(el), b = el.getBoundingClientRect();
     if (!b.width) { // 消えた部品
@@ -334,17 +338,35 @@ function morphBar(change) {
   }
 }
 
+let settleUntil = 0, settleTimer = null, scrollQueued = false;
 function setCompact(on) {
-  if (bar.classList.contains("compact") !== on) morphBar(() => bar.classList.toggle("compact", on));
+  if (bar.classList.contains("compact") === on) return;
+  settleUntil = performance.now() + BAR_MOTION.duration;
+  morphBar(() => bar.classList.toggle("compact", on));
 }
 
-function onScroll() {
+// 行ったり来たりして震えないよう、切り替えには「ため」を持たせる。
+// 小さくするのは、バーの高さより下まで来てから 8px 下へ進んだとき。大きくするのは、そこから 16px 上へ戻したとき。
+// 形を変えている途中は切り替えず、動き終わってから見直す
+function updateBar() {
   const max = Math.max(0, document.documentElement.scrollHeight - innerHeight);
   const y = Math.min(Math.max(scrollY, 0), max); // iPhone の引っぱり（ばね）で行き過ぎた分は数えない
   bar.classList.toggle("at-top", y < 1);
   if (y < 1) { setCompact(false); lastY = 0; return; }
-  if (y - lastY > 8) { setCompact(true); lastY = y; }       // 下へ
-  else if (lastY - y > 8) { setCompact(false); lastY = y; } // 上へ
+  const wait = settleUntil - performance.now();
+  if (wait > 0) { clearTimeout(settleTimer); settleTimer = setTimeout(updateBar, wait + 20); return; }
+  if (bar.classList.contains("compact")) {
+    if (y > lastY) lastY = y;                                  // 下へ進んでいる間は、いちばん下を覚えておく
+    else if (lastY - y > 16) { setCompact(false); lastY = y; } // 上へ
+  } else {
+    if (y < lastY) lastY = y;                                  // 上へ進んでいる間は、いちばん上を覚えておく
+    else if (y - lastY > 8 && y > bar.offsetHeight) { setCompact(true); lastY = y; } // 下へ
+  }
+}
+function onScroll() {
+  if (scrollQueued) return;
+  scrollQueued = true;
+  requestAnimationFrame(() => { scrollQueued = false; updateBar(); });
 }
 addEventListener("scroll", onScroll, { passive: true });
 
@@ -436,12 +458,12 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
 
   view.innerHTML = `
     <div class="page-head">
-      <a class="btn btn-ghost" href="#/day/${addDays(day.date, -1)}" aria-label="前の日">‹</a>
+      <a class="btn btn-ghost day-nav" href="#/day/${addDays(day.date, -1)}" aria-label="前の日">‹</a>
       <label class="date-pick" title="日付を選ぶ">
         <h1>${dateHTML(day.date_label)}<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></h1>
         <input type="date" id="pick-date" value="${esc(day.date)}" aria-label="日付を選ぶ">
       </label>
-      <a class="btn btn-ghost" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
+      <a class="btn btn-ghost day-nav" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
       ${day.is_today ? "" : `<a class="btn" href="#/day/${today}">今日</a>`}
     </div>
 
@@ -538,7 +560,7 @@ function stayHTML(day) {
   if (!stays.length) {
     return `<div class="label">研究室</div>
       <div class="stay-span empty">
-        <span class="cap io">${ICON_IN}IN</span><span class="total muted">研究室には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
+        <span class="cap io">${ICON_IN}IN</span><span class="total muted">研究室には来ていません</span><span class="cap right io">OUT${ICON_OUT}</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
       </div>`;
   }
@@ -561,7 +583,7 @@ function stayHTML(day) {
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
       <span class="total">${numUnits(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
-      <span class="cap right io ${exit.cls}" title="退室">${ICON_OUT}${esc(exit.cap)}</span>
+      <span class="cap right io ${exit.cls}" title="退室">${esc(exit.cap)}${ICON_OUT}</span>
       <span class="t num">${fmtHMDay(first, t0)}</span>
       <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i>${last.state === "in" ? `<span class="now-badge">在室中</span>` : ""}</span>
       <span class="t num right ${last.state === "in" ? "pending" : ""}">${esc(exit.t)}</span>
