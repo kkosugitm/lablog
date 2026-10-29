@@ -301,7 +301,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
     <hr class="section-break">
     <div class="grid detail">
       <section class="card span-2">
-        <div class="card-head"><h2>タイムライン</h2><span class="sub">ブロックに${touch ? "触れる" : "マウスを重ねる"}と内容が出ます</span></div>
+        <div class="card-head"><h2>タイムライン</h2></div>
         ${timelineHTML(day, names)}
       </section>
       <section class="card">
@@ -373,8 +373,7 @@ function stayTileHTML(day) {
       <div class="stay-span empty">
         <span class="cap io">${ICON_IN}IN</span><span class="total muted">研究室には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
-      </div>
-      <div class="foot">研究室の Wi-Fi に接続してから切れるまでが滞在時間です</div></div>`;
+      </div></div>`;
   }
   const first = stays[0].start, last = stays[stays.length - 1];
   const end = Math.max(...stays.map((s) => s.end));
@@ -390,8 +389,7 @@ function stayTileHTML(day) {
     : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cls: "tentative", cap: "OUT（仮）" }
     : { t: fmtHMDay(last.end, t0), cls: "out", cap: "OUT" };
   const foot = last.state === "tentative" ? "仮退出から4時間以内に研究室の Wi-Fi に戻れば、滞在が続きます"
-    : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（研究室の外）は滞在時間に含めません`
-    : "研究室の Wi-Fi に接続してから切れるまで（PC を閉じていた時間も含む）";
+    : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（研究室の外）は滞在時間に含めません` : "";
   return `<div class="tile stay-tile"><div class="label">研究室</div>
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
@@ -401,7 +399,7 @@ function stayTileHTML(day) {
       <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i></span>
       <span class="t num right ${last.state === "in" ? "now" : ""}">${esc(exit.t)}</span>
     </div>
-    <div class="foot">${foot}</div></div>`;
+    ${foot ? `<div class="foot">${foot}</div>` : ""}</div>`;
 }
 
 function timelineHTML(day, names) {
@@ -559,7 +557,7 @@ function gitHTML(day) {
   if (day.is_today && repos.length) {
     const hours = state.settings ? state.settings.settings.git_notify.hours : 2;
     const now = Date.now() / 1000;
-    parts.push(`<div class="card-head" style="margin:14px 0 6px"><h2 style="font-size:calc(13px * var(--fs))">いまの状態</h2></div><div class="list">${repos.map((r) => {
+    parts.push(`<h3 class="inner-title">いまの状態</h3><div class="list">${repos.map((r) => {
       const since = r.last_commit_ts ? fmtDur(now - r.last_commit_ts) + "前" : "コミットなし";
       const from = Math.max(r.dirty_since || now, r.last_commit_ts || 0);
       const late = r.dirty_files && now - from >= hours * HOUR;
