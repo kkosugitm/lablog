@@ -514,11 +514,11 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
         <div class="card-head"><h2>開いたファイル</h2><span class="sub">Windows の「最近使ったファイル」</span></div>
         <div class="scroll">${recentHTML(day)}</div>
       </section>
-      <section class="card span-2">
+      <section class="card">
         <div class="card-head"><h2>画面から読み取った文字</h2><span class="sub">日報の材料（この PC の中だけ・数日で消えます）</span></div>
         <div class="scroll">${screenTextsHTML(day)}</div>
       </section>
-      <section class="card span-2">
+      <section class="card">
         <div class="card-head"><h2>閲覧したページ</h2><span class="sub">Chrome・Edge ${day.web_total} 件${day.web_hidden
           ? `（画面に表示しなかったタブ ${day.web_hidden} 件は除いています）` : ""}</span></div>
         <div class="scroll">${webHTML(day, names)}</div>
