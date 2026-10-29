@@ -206,7 +206,10 @@ function renderStatus() {
   parts.push(`<span class="net">${net}</span>`);
   $("#status").innerHTML = parts.join("");
   const btn = $("#pause");
-  btn.textContent = s.paused ? "記録を再開" : "一時停止";
+  const label = s.paused ? "記録を再開" : "記録を一時停止";
+  btn.innerHTML = s.paused ? ICON_PLAY : ICON_STOP;
+  btn.setAttribute("aria-label", label);
+  btn.title = label;
   btn.classList.toggle("btn-primary", !!s.paused);
   renderNotices();
 }
@@ -265,10 +268,36 @@ $("#pause").addEventListener("click", async () => {
   flash(paused ? "記録を一時停止しました" : "記録を再開しました");
 });
 
+// ページの一番上では背景に溶け込ませ、少しでも下がったら角丸で浮かせる。下へ送っているあいだは小さく
+// （ロゴ・在室の表示・日/月だけ）、上へ戻し始めたら元の大きさに戻す（style.css の at-top・compact）
+const bar = $(".topbar");
+let lastY = 0;
+function onScroll() {
+  const max = Math.max(0, document.documentElement.scrollHeight - innerHeight);
+  const y = Math.min(Math.max(scrollY, 0), max); // iPhone の引っぱり（ばね）で行き過ぎた分は数えない
+  if (y < 1) {
+    bar.classList.add("at-top");
+    bar.classList.remove("compact");
+    lastY = 0;
+    return;
+  }
+  bar.classList.remove("at-top");
+  if (y - lastY > 8) { bar.classList.add("compact"); lastY = y; }        // 下へ
+  else if (lastY - y > 8) { bar.classList.remove("compact"); lastY = y; } // 上へ
+}
+addEventListener("scroll", onScroll, { passive: true });
+// バーは画面に固定してあるので、大きいときのバーの分だけ本文の上に余白をとる（小さくなっても本文は動かさない）
+function fitHeadSpace() {
+  if (bar.classList.contains("compact")) return;
+  document.body.style.setProperty("--head-space", `${Math.ceil(bar.getBoundingClientRect().bottom)}px`);
+}
+new ResizeObserver(fitHeadSpace).observe(bar);
+addEventListener("resize", fitHeadSpace);
+
 // ------------------------------------------------------------ 画面の切り替え
 
 function setTab(name) {
-  $$(".tabs a").forEach((a) => a.classList.toggle("active", a.dataset.tab === name));
+  $$("[data-tab]").forEach((a) => a.classList.toggle("active", a.dataset.tab === name));
 }
 
 async function route() {
@@ -334,7 +363,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
         ${categoryBarsHTML(day, names)}
       </section>
       <section class="card">
-        <div class="card-head"><h2>研究室</h2><span class="spacer"></span>
+        <div class="card-head"><h2>入退室の記録</h2><span class="spacer"></span>
           <button class="btn btn-sm" id="add-stay">＋ 追加</button></div>
         <div id="stays">${staysHTML(day)}</div>
       </section>
@@ -394,6 +423,8 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
 const ICON_IN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>`;
 const ICON_OUT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>`;
 const ICON_RELOAD = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
+const ICON_STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/></svg>`;
+const ICON_PLAY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>`;
 
 function stayTileHTML(day) {
   const stays = day.stays, t0 = day.range[0];
@@ -1208,7 +1239,6 @@ window.addEventListener("hashchange", route);
     $("[data-tab=settings]").remove();
     const reload = $("#pause");
     reload.innerHTML = ICON_RELOAD;
-    reload.classList.add("btn-icon");
     reload.setAttribute("aria-label", "更新");
     reload.title = "更新";
     const { signedIn, error } = await cloud.ready();

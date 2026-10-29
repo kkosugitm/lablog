@@ -12,6 +12,7 @@
   /* 作業量の演出で、壁紙の上に重ねるすりガラスのカード */
   --glass: rgba(252, 252, 251, 0.76);
   --glass-strong: rgba(252, 252, 251, 0.88);
+  --stay-glass: rgba(255, 255, 255, 0.5);  /* 研究室のタイル（半透明） */
   --w-dim: 1;
   --lift: 0 1px 2px rgba(0, 0, 0, 0.05), 0 12px 30px -16px rgba(0, 0, 0, 0.28);  /* メインのカードの浮き上がり */
   --surface-main: #ffffff;    /* メインのカード（いちばん明るい） */
@@ -53,6 +54,7 @@
     --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 14px 36px -10px rgba(0, 0, 0, 0.85);
     --glass: rgba(26, 26, 25, 0.70);
     --glass-strong: rgba(26, 26, 25, 0.84);
+    --stay-glass: rgba(37, 37, 36, 0.45);
     --w-dim: 0.75;
     --lift: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 14px 34px -14px rgba(0, 0, 0, 0.85);
     --surface-main: #252524;
@@ -100,17 +102,24 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .hidden { display: none !important; }
 
 /* ---- 上部バー ---- */
-/* 角丸の半透明の帯を、上と左右に少し間をあけて浮かせる。本文（幅 1148px）より左右に少しはみ出させて格上に見せる */
+/* 画面の上に固定する。ページの一番上では背景に溶け込ませ（at-top）、少しでも下がったら角丸の半透明の帯にして浮かせる。
+   下へ送っているあいだは小さく（compact：ロゴ・在室の表示・日/月だけ）、上へ戻し始めたら元に戻す（app.js の「上部バー」）。
+   本文（幅 1148px）より左右に少しはみ出させて格上に見せる。
+   大きさが変わっても本文が動かないよう、大きいときのバーの分の余白を本文の上にとる（--head-space） */
+body { padding-top: var(--head-space, 64px); }
 .topbar {
-  position: sticky; top: 10px; z-index: 10;
-  width: calc(100% - 16px); max-width: 1196px; margin: 10px auto 0;
+  position: fixed; top: 10px; left: 0; right: 0; z-index: 10;
+  width: calc(100% - 16px); max-width: 1196px; margin: 0 auto;
   border-radius: 16px;
   background: var(--header);
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
   backdrop-filter: blur(20px) saturate(1.8);
   border: 1px solid var(--header-line);
   box-shadow: var(--header-shadow);
+  transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease;
 }
+.topbar.at-top { background-color: transparent; border-color: transparent; box-shadow: none;
+                 -webkit-backdrop-filter: none; backdrop-filter: none; }
 .topbar-inner {
   padding: 10px 14px;
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
@@ -135,25 +144,33 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .pill.stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
 .status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
-  .topbar { width: calc(100% - 16px); top: 8px; margin-top: 8px; border-radius: 14px; }
+  .topbar { top: 8px; border-radius: 14px; }
   .topbar-inner { gap: 8px; padding: 8px 10px; }
   .status { order: 5; flex-basis: 100%; }
   .tabs { margin-left: auto; }
-  /* 文字が大きくても「ロゴ・タブ・ボタン」が 1 段に収まるよう、余白だけ詰める */
-  .topbar .tabs a { padding-left: 10px; padding-right: 10px; }
-  .topbar #pause { padding-left: 10px; padding-right: 10px; }
 }
 /* iPhone・iPad（iOS 26）：ページは時計の下から始まり、ページの上の端から約 30pt には iOS が「ぼかし」をかける
    （ページ側からは消せない）。浮いたヘッダーはその範囲より下（32px）に置いて縁をくっきりさせる */
 @supports (-webkit-touch-callout: none) {
-  .topbar { top: calc(env(safe-area-inset-top, 0px) + 32px); margin-top: calc(env(safe-area-inset-top, 0px) + 32px); }
+  .topbar { top: calc(env(safe-area-inset-top, 0px) + 32px); }
 }
+/* 小さいバー：1 段にして、ロゴ・在室の表示・日/月だけを出す */
+.topbar.compact .topbar-inner { padding-top: 6px; padding-bottom: 6px; }
+.topbar.compact .brand { font-size: calc(14px * var(--fs)); }
+.topbar.compact .brand img { width: 18px; height: 18px; }
+.topbar.compact :is(.tools, .status .net, .status .pill.paused) { display: none; }
+.topbar.compact .status { order: 0; flex: 1 1 auto; overflow: hidden; }
+.topbar.compact .pill { padding: 2px 9px; font-size: calc(12px * var(--fs)); }
+.topbar.compact .tabs a { padding-top: 2px; padding-bottom: 2px; }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
 .tabs a {
   padding: 4px 14px; border-radius: 7px; color: var(--ink-2); font-weight: 600; font-size: calc(13px * var(--fs));
 }
 .tabs a:hover { text-decoration: none; color: var(--ink); }
 .tabs a.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+/* 右端のアイコン（記録の一時停止・設定。ビューアーでは更新） */
+.tools { display: flex; align-items: center; gap: 6px; }
+.tools .active { background: var(--surface-2); }
 
 /* ---- ボタン・入力 ---- */
 .btn {
@@ -208,7 +225,7 @@ label.check { display: inline-flex; align-items: center; gap: 6px; cursor: point
 
 /* ---- レイアウト ---- */
 main.wrap { padding-top: 18px; padding-bottom: 48px; }
-.foot:not(:empty) { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap;
+#foot:not(:empty) { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap;
                     color: var(--muted); font-size: calc(12px * var(--fs)); padding-bottom: 32px; margin-top: -24px; }
 .signin { max-width: 460px; margin: 40px auto; display: grid; gap: 14px; justify-items: center; text-align: center; }
 .signin .notice { text-align: left; }
@@ -256,6 +273,10 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .detail { --surface: var(--surface-detail); }
 .main-area .tiles { margin-bottom: 0; }
 .main-area .tile { padding: 16px 18px; box-shadow: var(--lift); }
+/* 研究室のタイルは半透明にして、後ろの壁紙を透かす。点の縁取りも透明にする。
+   段階 3・4 の光る縁取りは、下に敷いた色が中まで透けてしまうので、このタイルには付けない */
+.main-area .tile.stay-tile { --surface: transparent; --glass-bg: var(--stay-glass); border-color: var(--border);
+  background: var(--stay-glass); -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5); }
 .main-area .tile .value { font-size: calc(30px * var(--fs)); }
 .main-area #report-card { padding: 20px 22px; box-shadow: var(--lift); }
 .main-area #report-card .md { font-size: calc(15px * var(--fs)); }
