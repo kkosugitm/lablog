@@ -159,8 +159,11 @@ window.addEventListener("scroll", () => { if (touch) tip.hidden = true; }, { pas
 
 // ------------------------------------------------------------ 上部バー
 
-const STATE_LABEL = { in: "在学中", tentative: "仮退出中", out: "学外" };
-const NET_LABEL = { univ: "大学", home: "自宅", ignored: "判定に使わない", other: "未登録", offline: "" };
+const STATE_LABEL = { in: "在室中", tentative: "仮退出中", out: "不在" };
+const NET_LABEL = { univ: "研究室", home: "自宅", ignored: "判定に使わない", other: "未登録", offline: "" };
+// 記録の中の場所の名前（"大学" など）は変えず、表示するときだけ置き換える
+const PLACE_LABEL = { "大学": "研究室" };
+const placeName = (key) => PLACE_LABEL[key] || key;
 
 function renderStatus() {
   const s = state.status;
@@ -208,7 +211,7 @@ function renderNotices() {
   }
   if (s && s.wifi_error) items.push(["error", esc(s.wifi_error)]);
   if (settings && !settings.wifi.univ.length) {
-    items.push(["warn", `大学の Wi-Fi がまだ登録されていません。研究室にいるときに <a href="#/settings">設定</a> の「大学として登録」を押してください（研究室専用と大学共通の両方）。`]);
+    items.push(["warn", `研究室の Wi-Fi がまだ登録されていません。研究室にいるときに <a href="#/settings">設定</a> の「研究室として登録」を押してください（研究室専用と大学共通の Wi-Fi の両方）。`]);
   }
   if (settings && !settings.watch_folders.length) {
     items.push(["warn", `監視するフォルダがまだありません。<a href="#/settings">設定</a> から研究フォルダ（ResearchM2 など）を追加すると、編集したファイルや Git のコミットも記録されます。`]);
@@ -271,7 +274,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
   const names = day.category_names;
   const loc = day.work_by_location;
   const locText = ["大学", "自宅", "その他"].filter((k) => loc[k] >= 60)
-    .map((k) => `${k} ${fmtDur(loc[k])}`).join("・") || "記録なし";
+    .map((k) => `${placeName(k)} ${fmtDur(loc[k])}`).join("・") || "記録なし";
 
   view.innerHTML = `
     <div class="page-head">
@@ -368,27 +371,27 @@ function stayTileHTML(day) {
   if (!stays.length) {
     return `<div class="tile stay-tile"><div class="label">研究室</div>
       <div class="stay-span empty">
-        <span class="cap io">${ICON_IN}IN</span><span class="total muted">大学には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
+        <span class="cap io">${ICON_IN}IN</span><span class="total muted">研究室には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
       </div>
-      <div class="foot">大学の Wi-Fi に接続してから切れるまでが滞在時間です</div></div>`;
+      <div class="foot">研究室の Wi-Fi に接続してから切れるまでが滞在時間です</div></div>`;
   }
   const first = stays[0].start, last = stays[stays.length - 1];
   const end = Math.max(...stays.map((s) => s.end));
   const pos = (t) => ((t - first) / Math.max(1, end - first)) * 100;
   const segs = stays.map((s) => {
     const left = pos(s.start), width = Math.max(1, pos(s.end) - left);
-    const what = s.state === "in" ? "在学中" : s.state === "tentative" ? "仮退出中" : "大学";
+    const what = s.state === "in" ? "在室中" : s.state === "tentative" ? "仮退出中" : "研究室";
     return `<span class="seg ${esc(s.state)}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"
       ${tipAttr(`<b>${what}</b><div>${fmtHMDay(s.start, t0)}〜${s.state === "in" ? "いま" : fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
   }).join("");
-  // 在学中はまだ OUT していないので薄く、仮退出は「OUT（仮）」
-  const exit = last.state === "in" ? { t: "在学中", cls: "pending", cap: "OUT" }
+  // 在室中はまだ OUT していないので薄く、仮退出は「OUT（仮）」
+  const exit = last.state === "in" ? { t: "在室中", cls: "pending", cap: "OUT" }
     : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cls: "tentative", cap: "OUT（仮）" }
     : { t: fmtHMDay(last.end, t0), cls: "out", cap: "OUT" };
-  const foot = last.state === "tentative" ? "仮退出から4時間以内に大学の Wi-Fi に戻れば、滞在が続きます"
-    : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（大学の外）は滞在時間に含めません`
-    : "大学の Wi-Fi に接続してから切れるまで（PC を閉じていた時間も含む）";
+  const foot = last.state === "tentative" ? "仮退出から4時間以内に研究室の Wi-Fi に戻れば、滞在が続きます"
+    : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（研究室の外）は滞在時間に含めません`
+    : "研究室の Wi-Fi に接続してから切れるまで（PC を閉じていた時間も含む）";
   return `<div class="tile stay-tile"><div class="label">研究室</div>
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
@@ -423,7 +426,7 @@ function timelineHTML(day, names) {
   }
 
   const stays = day.stays.map((s) => {
-    const label = s.state === "tentative" ? "仮退出中" : "大学";
+    const label = s.state === "tentative" ? "仮退出中" : "研究室";
     return `<span class="tl-stay ${s.state === "tentative" ? "tentative" : ""}" style="left:${L(Math.max(s.start, vs))};width:${W(Math.max(s.start, vs), Math.min(s.end, ve))}"
       ${tipAttr(`<b>${label}</b><div>${fmtHMDay(s.start, t0)}〜${fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
   }).join("");
@@ -441,11 +444,11 @@ function timelineHTML(day, names) {
   const used = names.filter((n) => day.timeline.some((b) => b.cat === n));
   const legend = used.map((n) => `<span><i class="sw" style="background:${catColor(n, names)}"></i>${esc(n)}</span>`).join("")
     + `<span><i class="sw" style="background:repeating-linear-gradient(135deg, var(--c-idle) 0 2px, transparent 2px 4px)"></i>離席</span>`
-    + `<span><i class="sw" style="background:var(--stay)"></i>大学にいた時間</span>`;
+    + `<span><i class="sw" style="background:var(--stay)"></i>研究室にいた時間</span>`;
 
   return `<div class="tl">
       <div style="position:absolute;inset:0 0 0 64px">${grid}${now}</div>
-      <div class="tl-row"><span class="tl-label">大学</span><div class="tl-track" style="background:transparent">${stays}</div></div>
+      <div class="tl-row"><span class="tl-label">研究室</span><div class="tl-track" style="background:transparent">${stays}</div></div>
       <div class="tl-row"><span class="tl-label">PC作業</span><div class="tl-track">${blocks}</div></div>
       <div class="tl-axis">${ticks}</div>
     </div>
@@ -464,13 +467,13 @@ function categoryBarsHTML(day, names) {
     </div>`).join("")}</div>`;
 }
 
-const REASON = { offcampus: "大学外の Wi-Fi に接続", timeout: "4時間戻らず", idle: "4時間操作なし", manual: "手動で修正" };
+const REASON = { offcampus: "研究室以外の Wi-Fi に接続", timeout: "4時間戻らず", idle: "4時間操作なし", manual: "手動で修正" };
 
 function staysHTML(day) {
-  if (!day.stays.length) return `<div class="empty">この日は大学の Wi-Fi への接続がありません。</div>`;
+  if (!day.stays.length) return `<div class="empty">この日は研究室の Wi-Fi への接続がありません。</div>`;
   return `<div class="stay-list">${day.stays.map((s) => `
     <div class="stay-row">
-      <span class="time">${fmtHMDay(s.start, day.range[0])} 〜 ${s.state === "in" ? "在学中" : fmtHMDay(s.end, day.range[0])}</span>
+      <span class="time">${fmtHMDay(s.start, day.range[0])} 〜 ${s.state === "in" ? "在室中" : fmtHMDay(s.end, day.range[0])}</span>
       <span class="ink2">${fmtDur(s.duration)}</span>
       ${s.state === "tentative" ? `<span class="tag warn">仮退出中</span>` : ""}
       ${s.reason ? `<span class="tag">${esc(REASON[s.reason] || s.reason)}</span>` : ""}
@@ -486,7 +489,7 @@ function openStayForm(day, stay) {
   const endDefault = stay ? (stay.state === "in" ? null : stay.end) : day.range[0] + 13 * HOUR;
   box.innerHTML = `<form id="stay-form" class="stay-list">
       <label class="field"><span>入室</span><input type="datetime-local" name="start" required value="${toLocalInput(startDefault)}"></label>
-      <label class="field"><span>退室${stay && stay.state === "in" ? "（空欄なら在学中のまま）" : ""}</span>
+      <label class="field"><span>退室${stay && stay.state === "in" ? "（空欄なら在室中のまま）" : ""}</span>
         <input type="datetime-local" name="end" ${stay && stay.state === "in" ? "" : "required"} value="${endDefault ? toLocalInput(endDefault) : ""}"></label>
       <div class="row">
         <button class="btn btn-primary" type="submit">保存</button>
@@ -760,9 +763,9 @@ async function renderMonth(monthArg) {
   for (const d of m.days) {
     const n = Number(d.date.slice(8));
     const tipHtml = `<b>${esc(d.date)}</b>`
-      + (d.stay ? `<div>大学 ${fmtHM(d.first_in)}〜${fmtHM(d.last_out)}（${fmtDur(d.stay)}）</div>` : `<div>大学：なし</div>`)
+      + (d.stay ? `<div>研究室 ${fmtHM(d.first_in)}〜${fmtHM(d.last_out)}（${fmtDur(d.stay)}）</div>` : `<div>研究室：なし</div>`)
       + `<div>PC作業 ${fmtDur(d.work)}</div>`
-      + Object.entries(d.by_location).filter(([, v]) => v >= 60).map(([k, v]) => `<div class="t-row"><span>${esc(k)}</span><span>${fmtDur(v)}</span></div>`).join("");
+      + Object.entries(d.by_location).filter(([, v]) => v >= 60).map(([k, v]) => `<div class="t-row"><span>${esc(placeName(k))}</span><span>${fmtDur(v)}</span></div>`).join("");
     cells.push(`<a class="cell ${d.date === today ? "today" : ""}" href="#/day/${d.date}" ${tipAttr(tipHtml)}>
       <span class="d"><span>${n}</span>${d.has_report ? `<span class="rep" title="日報あり"></span>` : ""}</span>
       ${d.stay ? `<span class="st">${fmtClock(d.stay)}</span>` : `<span class="st muted">—</span>`}
@@ -780,15 +783,15 @@ async function renderMonth(monthArg) {
         : `<a class="btn" href="/api/export/stays.csv?month=${esc(month)}">CSV で書き出す</a>`}
     </div>
     <div class="tiles">
-      <div class="tile"><div class="label">大学にいた日数</div><div class="value">${m.stay_days}<small>日</small></div></div>
+      <div class="tile"><div class="label">研究室にいた日数</div><div class="value">${m.stay_days}<small>日</small></div></div>
       <div class="tile"><div class="label">滞在時間の合計</div><div class="value">${esc(fmtDur(m.stay_total))}</div></div>
       <div class="tile"><div class="label">1日あたりの滞在</div><div class="value">${m.stay_days ? esc(fmtDur(avg)) : "—"}</div>
-        <div class="foot">大学にいた日の平均</div></div>
+        <div class="foot">研究室にいた日の平均</div></div>
       <div class="tile"><div class="label">PC作業時間の合計</div><div class="value">${esc(fmtDur(m.work_total))}</div>
         <div class="foot">自宅などでの作業も含む</div></div>
     </div>
     <section class="card">
-      <div class="card-head"><h2>カレンダー</h2><span class="sub">大きい数字：大学の滞在時間（時:分）／ 小さい数字：PC作業時間 ／ 青い点：日報あり</span></div>
+      <div class="card-head"><h2>カレンダー</h2><span class="sub">大きい数字：研究室の滞在時間（時:分）／ 小さい数字：PC作業時間 ／ 青い点：日報あり</span></div>
       <div class="cal">${["月", "火", "水", "木", "金", "土", "日"].map((w) => `<div class="dow">${w}</div>`).join("")}${cells.join("")}</div>
     </section>`;
   if (cloud) $("#csv").addEventListener("click", () => downloadCSV(m));
@@ -801,7 +804,7 @@ async function renderMonth(monthArg) {
 function downloadCSV(m) {
   const min = (sec) => Math.round((sec || 0) / 60);
   const hm = (ts) => fmtHM(ts).padStart(5, "0");
-  const rows = [["日付", "曜日", "最初の入室", "最後の退室", "滞在時間", "滞在(分)", "PC作業時間", "PC作業(分)", "うち大学(分)", "うち自宅(分)"]];
+  const rows = [["日付", "曜日", "最初の入室", "最後の退室", "滞在時間", "滞在(分)", "PC作業時間", "PC作業(分)", "うち研究室(分)", "うち自宅(分)"]];
   for (const d of m.days) {
     rows.push([d.date, "日月火水木金土"[new Date(d.date + "T12:00:00").getDay()],
       d.first_in ? hm(d.first_in) : "", d.last_out ? hm(d.last_out) : "",
@@ -841,7 +844,7 @@ const lines = (text) => text.split(/[\n,、]/).map((s) => s.trim()).filter(Boole
 async function renderSettings() {
   const { settings: s, data_dir: dataDir, repos, ssids } = await loadSettings();
   const current = ssids && ssids[0];
-  const where = !current ? "未接続" : s.wifi.univ.includes(current) ? "大学として登録済み"
+  const where = !current ? "未接続" : s.wifi.univ.includes(current) ? "研究室として登録済み"
     : s.wifi.home.includes(current) ? "自宅として登録済み"
     : s.wifi.ignore.includes(current) ? "判定に使わない Wi-Fi として登録済み" : "未登録";
   const ssidList = (kind) => s.wifi[kind].length ? s.wifi[kind].map((x) => `
@@ -858,13 +861,13 @@ async function renderSettings() {
         <div class="card-head"><h2>Wi-Fi の登録</h2></div>
         <p class="help">いま接続中：<b>${esc(current || "なし")}</b>（${where}）</p>
         <div class="row">
-          <button class="btn btn-primary" data-wifi-register="univ" ${current ? "" : "disabled"}>大学として登録</button>
+          <button class="btn btn-primary" data-wifi-register="univ" ${current ? "" : "disabled"}>研究室として登録</button>
           <button class="btn" data-wifi-register="home" ${current ? "" : "disabled"}>自宅として登録</button>
           <button class="btn" data-wifi-register="ignore" ${current ? "" : "disabled"}>判定に使わない</button>
         </div>
-        <p class="help">研究室専用の Wi-Fi と大学共通の Wi-Fi は、どちらも「大学」として登録してください。
-          iPhone のテザリングなど、大学でも大学の外でも使う Wi-Fi は「判定に使わない」にします。つないでいる間は、直前の状態（在学中・仮退出中）をそのまま続けます。</p>
-        <h3 class="help" style="margin-top:12px">大学</h3><div class="set-list">${ssidList("univ")}</div>
+        <p class="help">研究室専用の Wi-Fi と、大学共通の Wi-Fi（ScienceTokyo など）は、どちらも「研究室」として登録してください。
+          iPhone のテザリングなど、研究室でも外でも使う Wi-Fi は「判定に使わない」にします。つないでいる間は、直前の状態（在室中・仮退出中）をそのまま続けます。</p>
+        <h3 class="help" style="margin-top:12px">研究室</h3><div class="set-list">${ssidList("univ")}</div>
         <h3 class="help">自宅</h3><div class="set-list">${ssidList("home")}</div>
         <h3 class="help">判定に使わない</h3><div class="set-list">${ssidList("ignore")}</div>
       </section>
