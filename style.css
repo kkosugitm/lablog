@@ -155,7 +155,8 @@ body { padding-top: var(--head-space, 64px); }
 .pill.stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
 .status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
-  .topbar { top: 8px; }
+  /* スマホ幅では大きいバーが 2 段になるので、小さいバーは上下の中央ではなく、大きいバーの上の端にそろえる */
+  .topbar { top: 8px; align-items: flex-start; }
   .topbar-bg { border-radius: 24px; }
   .topbar-inner { gap: 8px; padding: 8px 10px; }
   .status { order: 5; flex-basis: 100%; }
