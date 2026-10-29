@@ -359,12 +359,16 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
 
 // 大学での滞在：入室と退室の時刻を線でつなぎ、その区間の長さ（滞在時間）を真ん中に出す。
 // 1 日に何回か出入りした日は、大学にいた区間だけを塗り、あいだ（大学の外）は点線にする。
+// 入る（扉に向かう矢印）・出る（扉から出る矢印）のアイコン
+const ICON_IN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>`;
+const ICON_OUT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>`;
+
 function stayTileHTML(day) {
   const stays = day.stays, t0 = day.range[0];
   if (!stays.length) {
     return `<div class="tile stay-tile"><div class="label">大学での滞在</div>
       <div class="stay-span empty">
-        <span class="cap">入室</span><span class="total muted">大学には来ていません</span><span class="cap right">退室</span>
+        <span class="cap io">${ICON_IN}IN</span><span class="total muted">大学には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
       </div>
       <div class="foot">大学の Wi-Fi に接続してから切れるまでが滞在時間です</div></div>`;
@@ -378,17 +382,18 @@ function stayTileHTML(day) {
     return `<span class="seg ${esc(s.state)}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"
       ${tipAttr(`<b>${what}</b><div>${fmtHMDay(s.start, t0)}〜${s.state === "in" ? "いま" : fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
   }).join("");
-  const exit = last.state === "in" ? { t: "在学中", cap: "いまも大学にいます" }
-    : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cap: "仮退出" }
-    : { t: fmtHMDay(last.end, t0), cap: "退室" };
+  // 在学中はまだ OUT していないので薄く、仮退出は「OUT（仮）」
+  const exit = last.state === "in" ? { t: "在学中", cls: "pending", cap: "OUT" }
+    : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cls: "tentative", cap: "OUT（仮）" }
+    : { t: fmtHMDay(last.end, t0), cls: "out", cap: "OUT" };
   const foot = last.state === "tentative" ? "仮退出から4時間以内に大学の Wi-Fi に戻れば、滞在が続きます"
     : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（大学の外）は滞在時間に含めません`
     : "大学の Wi-Fi に接続してから切れるまで（PC を閉じていた時間も含む）";
   return `<div class="tile stay-tile"><div class="label">大学での滞在</div>
     <div class="stay-span">
-      <span class="cap">入室</span>
+      <span class="cap io in" title="入室">${ICON_IN}IN</span>
       <span class="total">${esc(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
-      <span class="cap right">${esc(exit.cap)}</span>
+      <span class="cap right io ${exit.cls}" title="退室">${ICON_OUT}${esc(exit.cap)}</span>
       <span class="t num">${fmtHMDay(first, t0)}</span>
       <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i></span>
       <span class="t num right ${last.state === "in" ? "now" : ""}">${esc(exit.t)}</span>

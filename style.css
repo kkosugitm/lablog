@@ -28,6 +28,8 @@
   --good-text: #006300;
   --warning: #fab219;
   --critical: #d03b3b;
+  --critical-text: #b42828;  /* 赤の文字（白い地で読みやすい濃さ） */
+  --warning-text: #9a6500;   /* 黄色の文字（同上） */
   --stay: #52514e;
   /* 分類の色（固定の順番。色は分類に付き、順位では変わらない） */
   --c1: #2a78d6; --c2: #eb6834; --c3: #1baf7a; --c4: #eda100;
@@ -62,6 +64,8 @@
     --accent: #3987e5;
     --accent-soft: #1b2a3d;
     --good-text: #0ca30c;
+    --critical-text: #f07272;
+    --warning-text: #f0b43c;
     --stay: #c3c2b7;
     --c1: #3987e5; --c2: #d95926; --c3: #199e70; --c4: #c98500;
     --c5: #d55181; --c6: #008300; --c7: #9085e9; --c8: #e66767;
@@ -227,7 +231,15 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .stay-span { display: grid; grid-template-columns: auto minmax(60px, 1fr) auto; column-gap: 18px; row-gap: 2px;
              align-items: center; margin-top: 8px; }
 .stay-span .cap { font-size: 12px; color: var(--muted); align-self: end; white-space: nowrap; }
-.stay-span .right { text-align: right; }
+.stay-span .right { text-align: right; justify-self: end; }
+/* IN（緑・入るアイコン）と OUT（赤・出るアイコン）。色だけでなく文字とアイコンでも分かるようにする */
+.stay-span .io { display: inline-flex; align-items: center; gap: 4px; font-weight: 750; letter-spacing: .06em; }
+.stay-span .io svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2;
+                     stroke-linecap: round; stroke-linejoin: round; }
+.stay-span .io.in { color: var(--good-text); }
+.stay-span .io.out { color: var(--critical-text); }
+.stay-span .io.tentative { color: var(--warning-text); }
+.stay-span .io.pending { color: var(--muted); opacity: .7; }
 .stay-span .total { text-align: center; font-size: 22px; font-weight: 700; line-height: 1.2; align-self: end; }
 .stay-span .total small { display: block; font-size: 11.5px; font-weight: 600; color: var(--ink-2); }
 .stay-span .t { font-size: 28px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
@@ -240,10 +252,11 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
                             box-shadow: inset 0 0 0 1px var(--stay); }
 .stay-span .dot { position: absolute; top: 50%; width: 12px; height: 12px; margin-top: -6px; border-radius: 50%;
                   background: var(--stay); box-shadow: 0 0 0 2px var(--surface); }
-.stay-span .dot.start { left: -6px; }
+.stay-span .dot.start { left: -6px; background: var(--good); }
 .stay-span .dot.end { right: -6px; }
+.stay-span .track.closed .dot.end { background: var(--critical); }
 .stay-span .track.in .dot.end { background: var(--good); animation: stay-pulse 2s ease-out infinite; }
-.stay-span .track.tentative .dot.end { background: var(--surface); box-shadow: inset 0 0 0 2px var(--stay), 0 0 0 2px var(--surface); }
+.stay-span .track.tentative .dot.end { background: var(--surface); box-shadow: inset 0 0 0 2px var(--warning), 0 0 0 2px var(--surface); }
 @keyframes stay-pulse {
   from { box-shadow: 0 0 0 2px var(--surface), 0 0 0 2px color-mix(in srgb, var(--good) 55%, transparent); }
   to   { box-shadow: 0 0 0 2px var(--surface), 0 0 0 11px transparent; }
