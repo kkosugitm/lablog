@@ -304,11 +304,11 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .main-area .tiles { margin-bottom: 0; }
 .main-area .tile { padding: 16px 18px; box-shadow: var(--lift); }
 /* 研究室の滞在と PC作業時間を 1 つにまとめたタイル。PC では左右に、スマホでは上下に並べて細い線で分け、
-   右上に「熱量」を出す。半透明にして後ろの壁紙を透かす（点の縁取りも透明にする）。
-   熱量 3・4 の光る縁取りは、下に敷いた色が中まで透けてしまうので、このタイルには付けない */
+   右上に「フロー」を出す。半透明にして後ろの壁紙を透かす（点の縁取りも透明にする）。
+   フロー 3・4 の光る縁取りは、下に敷いた色が中まで透けてしまうので、このタイルには付けない */
 .main-area .tile.day-tile { --surface: transparent; --glass-bg: var(--stay-glass); border-color: var(--border);
   background: var(--stay-glass); -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
-  position: relative; display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); } /* 右の列は見出しと熱量が並ぶ幅を確保 */
+  position: relative; display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); } /* 右の列は見出しとフローが並ぶ幅を確保 */
 .day-tile .day-work { border-left: 1px solid var(--border); margin-left: 22px; padding-left: 22px; }
 .day-tile > .level { position: absolute; top: 15px; right: 18px; }
 @media (max-width: 760px) {
@@ -539,7 +539,7 @@ body[data-level="4"] #wallpaper i:nth-child(even) { animation-duration: 46s; ani
 }
 body[data-level]:not([data-level="0"]) .foot { color: var(--ink-2); }
 
-/* 日別のタイルの右上の「熱量」（その日の作業量。4 つの目盛り） */
+/* 日別のタイルの右上の「フロー」（その日の作業量。4 つの目盛り） */
 .level { display: inline-flex; align-items: center; gap: 3px; padding: 3px 10px 3px 9px; border-radius: 999px;
          background: var(--surface-2); cursor: default; }
 .level .level-name { font-size: calc(11.5px * var(--fs)); font-weight: 700; color: var(--ink-2); margin-right: 5px; letter-spacing: .04em; }
