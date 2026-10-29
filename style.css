@@ -143,11 +143,14 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   .topbar .tabs a { padding-left: 10px; padding-right: 10px; }
   .topbar #pause { padding-left: 10px; padding-right: 10px; }
 }
-/* iPhone・iPad（iOS 26）は画面の上端（時計の裏）を特別に扱い、上から浮かせたヘッダーとは相性が悪い。
-   標準のアプリと同じく、ヘッダーを上端にくっつけて時計の裏まで伸ばし、角丸は下側だけにする */
+/* iPhone・iPad（iOS 26）は、時計の裏とそのすぐ下に「ぼかし」をかけて、下のページを透かして見せる。
+   浮いたヘッダーの上の縁がそこに入るとぼやけるので、時計の下に少し広めの隙間をあけてヘッダーを置き、
+   時計の裏から隙間までを地の色で塗りつぶす（ぼかす対象が一色なら、ぼかしても見た目は変わらない） */
 @supports (-webkit-touch-callout: none) {
-  .topbar { top: 0; width: 100%; max-width: none; margin: 0; border-top: 0; border-radius: 0 0 20px 20px;
-            padding-top: env(safe-area-inset-top, 0px); }
+  .topbar { top: calc(env(safe-area-inset-top, 0px) + 18px); margin-top: calc(env(safe-area-inset-top, 0px) + 18px); }
+  body::before { content: ""; position: fixed; left: 0; right: 0; top: -120px; z-index: 9; pointer-events: none;
+                 height: calc(120px + env(safe-area-inset-top, 0px) + 18px);
+                 background: linear-gradient(to bottom, var(--page) calc(100% - 10px), transparent); }
 }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
 .tabs a {
@@ -425,7 +428,10 @@ details.group .inner .list-item { font-size: calc(13px * var(--fs)); padding: 4p
    その日の作業時間で body[data-level] が 0〜4 に変わる（app.js の LEVEL_HOURS）。
    0 は地味なまま。1 から壁紙の光が出て、カードがすりガラスになり、4 で最も鮮やかに・ゆっくり動く。
    分類の色（タイムライン・横棒）は意味を持つので変えない。変えるのは背景とカード・タイルだけ。 */
-#wallpaper { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+/* iPhone の Safari では、ページは画面の一番下（アドレス欄の裏）や時計の裏まで描かれるが、
+   固定した部品はその手前までしか届かない。壁紙が届かない部分に地の色の帯が見えないよう、上下の外側まで広げる */
+#wallpaper { position: fixed; top: -120px; bottom: -120px; left: 0; right: 0; z-index: -1; overflow: hidden;
+             pointer-events: none; }
 #wallpaper i {
   position: absolute; width: 90vmax; height: 90vmax; border-radius: 50%;
   opacity: calc(var(--w-opacity, 0) * var(--w-dim));
