@@ -556,7 +556,7 @@ function gitHTML(day) {
   if (day.is_today && repos.length) {
     const hours = state.settings ? state.settings.settings.git_notify.hours : 2;
     const now = Date.now() / 1000;
-    parts.push(`<div class="card-head" style="margin:14px 0 6px"><h2 style="font-size:13px">いまの状態</h2></div><div class="list">${repos.map((r) => {
+    parts.push(`<div class="card-head" style="margin:14px 0 6px"><h2 style="font-size:calc(13px * var(--fs))">いまの状態</h2></div><div class="list">${repos.map((r) => {
       const since = r.last_commit_ts ? fmtDur(now - r.last_commit_ts) + "前" : "コミットなし";
       const from = Math.max(r.dirty_since || now, r.last_commit_ts || 0);
       const late = r.dirty_files && now - from >= hours * HOUR;
