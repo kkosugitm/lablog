@@ -263,6 +263,14 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .signin .notice { text-align: left; }
 .page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 /* 前の日・次の日のボタン：PC では小さな丸。スマホ幅では日付（年月日）の部分と同じ高さに伸ばす */
+/* 現在時刻：日付の行の右端（スマホ幅では「現在」を上の段に置く） */
+.page-head .clock { margin-left: auto; display: inline-flex; align-items: baseline; gap: 6px; line-height: 1; }
+.clock-label { font-size: calc(12px * var(--fs)); font-weight: 700; color: var(--ink-2); }
+.clock-time { font-size: calc(26px * var(--fs)); font-weight: 700; font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) {
+  .page-head .clock { flex-direction: column; align-items: flex-end; gap: 5px; }
+  .clock-time { font-size: calc(22px * var(--fs)); }
+}
 .page-head > .day-nav { display: inline-flex; align-items: center; justify-content: center;
                         width: 32px; height: 32px; padding: 0; border-radius: 999px; }
 .page-head h1 { font-size: calc(32px * var(--fs)); line-height: 1.15; margin-right: 4px; }
@@ -346,7 +354,18 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 }
 .main-area .tile .value { font-size: calc(36px * var(--fs)); }
 .main-area #report-card { padding: 16px 18px; box-shadow: var(--lift); }
-.main-area #report-card .md { font-size: calc(15px * var(--fs)); }
+.main-area #report-card .md, #report-text { font-size: calc(16px * var(--fs)); }
+/* 日報：ノート風。罫線を引き、手書き風の文字にする（Windows は UD デジタル 教科書体、iPhone は丸ゴシック）。
+   文字の行と罫線がそろうよう、行の高さと見出しの間隔を罫線の間隔（--rule）にそろえる */
+.note { --rule: calc(32px * var(--fs)); --rule-color: color-mix(in srgb, var(--title) 30%, transparent);
+  font-family: "Klee One", "Klee", "UD Digi Kyokasho N-R", "UD デジタル 教科書体 N-R", "Hiragino Maru Gothic ProN", var(--font);
+  line-height: var(--rule);
+  background-image: linear-gradient(to bottom, transparent calc(var(--rule) - 1px), var(--rule-color) calc(var(--rule) - 1px));
+  background-size: 100% var(--rule); }
+.md.note { line-height: var(--rule); padding-bottom: var(--rule); } /* 最後に空の行を 1 本残す */
+.md.note :is(h3, h4, h5, p, ul, ol, li) { margin: 0; line-height: var(--rule); }
+.md.note :is(h3, h4, h5):not(:first-child) { margin-top: var(--rule); }
+textarea.note { padding: 0 4px; background-color: transparent; background-attachment: local; border-radius: 6px; }
 @media (max-width: 760px) {
   .main-area .tile .value { font-size: calc(28px * var(--fs)); }
   .day-tile .stay-span .total { font-size: calc(24px * var(--fs)); }
@@ -363,10 +382,9 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .stay-span .io { display: inline-flex; align-items: center; gap: 4px; font-weight: 750; letter-spacing: .06em; }
 .stay-span .io svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2;
                      stroke-linecap: round; stroke-linejoin: round; }
-.stay-span .io.in { color: var(--good-text); }
-.stay-span .io.out { color: var(--critical-text); }
-.stay-span .io.tentative { color: var(--warning-text); }
-.stay-span .io.pending { color: var(--muted); opacity: .7; }
+.stay-span .cap.io { color: var(--good-text); }
+.stay-span .cap.io.right { color: var(--critical-text); }
+.stay-span .cap.io.right.tentative { color: var(--warning-text); } /* 仮退出は黄 */
 .stay-span .total { text-align: center; font-size: calc(30px * var(--fs)); font-weight: 700; line-height: 1.2; align-self: end; }
 .stay-span .total small { display: block; font-size: calc(11.5px * var(--fs)); font-weight: 600; color: var(--ink-2); }
 .stay-span .t { font-size: calc(28px * var(--fs)); font-weight: 700; line-height: 1.2; white-space: nowrap; }

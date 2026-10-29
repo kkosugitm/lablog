@@ -49,6 +49,13 @@ function dateHTML(label) {
   const [, year = "", rest = label] = /^(\d+年)?(.*)$/.exec(label);
   return `<span class="date-text">${year ? `<span class="year">${numUnits(year)}</span>` : ""}<span class="md">${numUnits(rest)}</span></span>`;
 }
+// 現在時刻（日別の画面の日付の行の右端）。10 秒ごとに書き換える
+function nowHM() {
+  const d = new Date();
+  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+const clockHTML = () => `<span class="clock"><span class="clock-label">現在</span><span class="clock-time">${nowHM()}</span></span>`;
+setInterval(() => $$(".clock-time").forEach((el) => { el.textContent = nowHM(); }), 10000);
 function fmtClock(sec) {
   const m = Math.round((sec || 0) / 60);
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -465,6 +472,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       </label>
       <a class="btn btn-ghost day-nav" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
       ${day.is_today ? "" : `<a class="btn" href="#/day/${today}">今日</a>`}
+      ${clockHTML()}
     </div>
 
     <!-- よく見る部分（メイン）：研究室の滞在と PC作業時間（1 つのタイル）、日報 -->
@@ -884,8 +892,8 @@ function renderReport(day, { editing = false } = {}) {
     : `${cloud ? "" : `<button class="btn" id="report-gen">${text ? "下書きを作り直す" : "下書きを作成"}</button>`}
        <button class="btn ${text ? "" : "btn-primary"}" id="report-edit">${text ? "編集" : "書く"}</button>`;
   const body = editing
-    ? `<textarea id="report-text" placeholder="今日やったことをメモできます。「## 見出し」「- 箇条書き」のように書くと、整えて表示します。">${esc(text)}</textarea>`
-    : text ? `<div class="md">${renderMarkdown(text)}</div>`
+    ? `<textarea id="report-text" class="note" placeholder="今日やったことをメモできます。「## 見出し」「- 箇条書き」のように書くと、整えて表示します。">${esc(text)}</textarea>`
+    : text ? `<div class="md note">${renderMarkdown(text)}</div>`
     : `<div class="empty">${cloud ? "「書く」で、この日のメモを残せます。" : "「下書きを作成」で記録から下書きを作ります。「書く」で自分でメモすることもできます。"}</div>`;
   card.innerHTML = `
     <div class="card-head report-head"><h2>日報</h2><span class="spacer"></span>${buttons}</div>
