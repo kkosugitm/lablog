@@ -39,6 +39,7 @@
   --c-other: #a8a69f;
   --c-idle: #b9b7af;
   --radius: 10px;
+  --safe-top: env(safe-area-inset-top, 0px);  /* iPhone の時計の帯の高さ（PC では 0） */
   --fs: 1.1;  /* 文字の大きさの倍率。すべての font-size にこれを掛ける（余白は変えない） */
   --font: system-ui, -apple-system, "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif;
 }
@@ -92,7 +93,8 @@ h1, h2, h3 { margin: 0; font-weight: 650; }
 h2 { font-size: calc(15px * var(--fs)); }
 code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: calc(12.5px * var(--fs));
        background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
-.wrap { max-width: 1180px; margin: 0 auto; padding: 0 16px; }
+.wrap { max-width: 1180px; margin: 0 auto;
+        padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
 .muted { color: var(--muted); }
 .ink2 { color: var(--ink-2); }
 .num { font-variant-numeric: tabular-nums; }
@@ -101,8 +103,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 /* ---- 上部バー ---- */
 /* 角丸の半透明の帯を、上と左右に少し間をあけて浮かせる。本文（幅 1148px）より左右に少しはみ出させて格上に見せる */
 .topbar {
-  position: sticky; top: 10px; z-index: 10;
-  width: calc(100% - 16px); max-width: 1196px; margin: 10px auto 0;
+  position: sticky; top: calc(var(--safe-top) + 10px); z-index: 10;
+  width: calc(100% - 16px); max-width: 1196px; margin: calc(var(--safe-top) + 10px) auto 0;
   border-radius: 16px;
   background: var(--header);
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
@@ -110,11 +112,13 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   border: 1px solid var(--header-line);
   box-shadow: var(--header-shadow);
 }
-/* iPhone・iPad の Safari は、画面の上端に固定された部品の色で時計の帯を塗る。
-   ヘッダーを浮かせて上に隙間ができると、後ろの壁紙がぼやけて映るので、上端に地の色の細い帯を固定する */
-@supports (-webkit-touch-callout: none) {
-  body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 8px; z-index: 9;
-                 background: var(--page); }
+/* iPhone・iPad では、ページが時計の帯の裏まで広がる（viewport-fit=cover）。
+   時計の帯は半透明で、裏の壁紙やヘッダーがぼやけて映るので、帯の高さ（--safe-top）と、
+   その下のヘッダーまでの隙間を地の色で塗りつぶし、浮いたヘッダーは帯の下に置く。PC では --safe-top は 0 */
+body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; z-index: 9;
+               height: var(--safe-top); background: var(--page); pointer-events: none; }
+@supports (-webkit-touch-callout: none) {  /* iPhone・iPad だけ、ヘッダーまでの隙間も塗る */
+  body::before { height: calc(var(--safe-top) + 8px); }
 }
 .topbar-inner {
   padding: 10px 14px;
@@ -140,7 +144,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .pill.stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
 .status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
-  .topbar { width: calc(100% - 16px); top: 8px; margin-top: 8px; border-radius: 14px; }
+  .topbar { width: calc(100% - 16px); top: calc(var(--safe-top) + 8px); margin-top: calc(var(--safe-top) + 8px);
+            border-radius: 14px; }
   .topbar-inner { gap: 8px; padding: 8px 10px; }
   .status { order: 5; flex-basis: 100%; }
   .tabs { margin-left: auto; }
