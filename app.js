@@ -129,7 +129,7 @@ function levelHTML(day) {
   const level = forcedLevel != null ? Number(forcedLevel) : levelOf(sec);
   const next = LEVEL_HOURS[level];
   const tipHtml = `<b>この日の段階 ${level} / 4</b><div>PC作業 ${fmtDur(day.work_total)}・滞在 ${fmtDur(day.stay_total)}</div>`
-    + `<div class="muted">${next ? `あと ${fmtDur(next * HOUR - sec)} で次の段階（背景が変わります）` : "いちばん上の段階です"}</div>`;
+    + `<div class="muted">${next ? `あと ${fmtDur(next * HOUR - sec)} で次の段階` : "いちばん上の段階です"}</div>`;
   return `<span class="level" ${tipAttr(tipHtml)} role="img" aria-label="この日の段階 ${level} / 4">${
     [0, 1, 2, 3].map((i) => `<i class="${i < level ? "on" : ""}"></i>`).join("")}</span>`;
 }
@@ -197,8 +197,8 @@ function renderStatus() {
   if (s.paused) {
     parts.push(`<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>`);
   }
-  const since = s.state === "in" ? `（${fmtHM(s.since)}〜）`
-    : s.state === "tentative" ? `（${fmtHM(s.since)}〜）` : "";
+  // 時刻は小さいバーでは畳む（style.css の .since）
+  const since = ["in", "tentative"].includes(s.state) ? `<span class="since">（${fmtHM(s.since)}〜）</span>` : "";
   parts.push(`<span class="pill ${esc(s.state)}"><span class="dot"></span>${STATE_LABEL[s.state] || ""}${since}</span>`);
   const net = s.ssids && s.ssids.length
     ? `Wi-Fi：${esc(s.ssids.join(", "))}${NET_LABEL[s.net] ? `（${NET_LABEL[s.net]}）` : ""}`
@@ -220,7 +220,7 @@ function renderCloudStatus(s) {
   if (s.paused) parts.push(`<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>`);
   if (s.state !== "none") {
     const stale = s.exported && Date.now() / 1000 - s.exported > 15 * 60;
-    const since = ["in", "tentative"].includes(s.state) && s.since ? `（${fmtHM(s.since)}〜）` : "";
+    const since = ["in", "tentative"].includes(s.state) && s.since ? `<span class="since">（${fmtHM(s.since)}〜）</span>` : "";
     parts.push(`<span class="pill ${esc(s.state)} ${stale ? "stale" : ""}"><span class="dot"></span>${STATE_LABEL[s.state] || ""}${since}</span>`);
     parts.push(`<span class="net">PC の最終更新：${s.exported ? fmtWhen(s.exported) : "—"}</span>`);
   }
@@ -270,50 +270,62 @@ $("#pause").addEventListener("click", async () => {
 
 // ページの一番上では背景に溶け込ませ、少しでも下がったら角丸で浮かせる。下へ送っているあいだは小さく
 // （ロゴ・在室の表示・日/月だけ）、上へ戻し始めたら元の大きさに戻す（style.css の at-top・compact）。
-// 大きさが変わるときは、バーの高さを伸び縮みさせ、残る部品は新しい位置まで滑らせる。
-// 消える部品は先に薄くしてから縮め、現れる部品は少し遅れて浮かび上がらせる
-const bar = $(".topbar"), barInner = $(".topbar-inner");
-const BAR_MOTION = { duration: 380, easing: "cubic-bezier(.22, 1, .36, 1)" };
+// 大きさが変わるときは、帯（.topbar-bg）を古い形から新しい形へ伸び縮みさせ、残る部品は新しい位置まで滑らせる。
+// 消える部品は写しを元の場所に残して薄く消し、現れる部品は少し遅れて浮かび上がらせる。すべて同時に動かす
+const bar = $(".topbar"), barInner = $(".topbar-inner"), barBg = $(".topbar-bg");
+const BAR_MOTION = { duration: 560, easing: "cubic-bezier(.32, .72, 0, 1)" };
 const calm = matchMedia("(prefers-reduced-motion: reduce)");
-let lastY = 0, fading = null;
+let lastY = 0;
 
-const barParts = () => [...bar.querySelectorAll(".brand, .tabs, .tools, #status > *")];
+const barParts = () => [...bar.querySelectorAll(".brand, .tabs, .tools, #status > *")].filter((el) => !el.classList.contains("ghost"));
+// 色の切り替え（CSS の transition）は止めずに、前回の伸び縮みだけを止める
+const stopMotion = (el) => el.getAnimations().forEach((a) => { if (!(a instanceof CSSTransition)) a.cancel(); });
 
-// 変える前の位置と大きさを測っておき、変えたあと、元の場所に見せかけた状態から新しい場所へ動かす
+// 消える部品の写しを、元の場所に重ねて置き、薄くしてから捨てる（本物はすぐに隠れる）
+function fadeOutCopy(el, rect, display, opacity) {
+  const copy = el.cloneNode(true);
+  copy.classList.add("ghost");
+  for (const x of [copy, ...copy.querySelectorAll("[id]")]) x.removeAttribute("id");
+  copy.setAttribute("aria-hidden", "true");
+  copy.inert = true;
+  Object.assign(copy.style, { position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`,
+                              height: `${rect.height}px`, margin: "0", display, pointerEvents: "none" });
+  el.after(copy);
+  copy.animate({ opacity: [opacity, 0], transform: ["none", "scale(.96)"] }, { duration: 240, easing: "ease-out", fill: "forwards" })
+    .finished.then(() => copy.remove(), () => copy.remove());
+}
+
+// 変える前の形と位置を測っておき、変えたあと、元の形に見せかけた状態から新しい形へ動かす
 function morphBar(change) {
   if (calm.matches) return change();
-  const before = new Map(barParts().map((el) => [el, el.getBoundingClientRect()]));
-  const h0 = bar.getBoundingClientRect().height;
-  [bar, ...before.keys()].forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
+  const parts = barParts();
+  const before = new Map(parts.map((el) => {
+    const cs = getComputedStyle(el);
+    return [el, { rect: el.getBoundingClientRect(), display: cs.display, opacity: cs.opacity }];
+  }));
+  const bg0 = barBg.getBoundingClientRect();
+  [barBg, ...parts].forEach(stopMotion);
   change();
-  const h1 = bar.getBoundingClientRect().height;
-  if (Math.abs(h1 - h0) > 0.5) bar.animate({ height: [`${h0}px`, `${h1}px`] }, BAR_MOTION);
-  for (const el of barParts()) {
-    const a = before.get(el), b = el.getBoundingClientRect();
-    if (!b.width) continue;
-    if (!a || !a.width) { // 現れた部品
-      el.animate({ opacity: [0, 1], transform: ["translateY(-6px)", "none"] }, { ...BAR_MOTION, delay: 100, fill: "backwards" });
+  const bg1 = barBg.getBoundingClientRect();
+  barBg.animate({ top: [`${bg0.top - bg1.top}px`, "0px"], left: [`${bg0.left - bg1.left}px`, "0px"],
+                  right: [`${bg1.right - bg0.right}px`, "0px"], bottom: [`${bg1.bottom - bg0.bottom}px`, "0px"] }, BAR_MOTION);
+  for (const el of parts) {
+    const { rect: a, display, opacity } = before.get(el), b = el.getBoundingClientRect();
+    if (!b.width) { // 消えた部品
+      if (a.width) fadeOutCopy(el, a, display, opacity);
       continue;
     }
-    const dx = a.left - b.left, dy = a.top - b.top, s = a.height / b.height;
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(s - 1) < 0.01) continue;
-    el.animate({ transform: [`translate(${dx}px, ${dy}px) scale(${s})`, "none"] }, BAR_MOTION);
+    if (!a.width) { // 現れた部品
+      el.animate({ opacity: [0, 1], transform: ["scale(.96)", "none"] }, { ...BAR_MOTION, duration: 460, delay: 120, fill: "backwards" });
+      continue;
+    }
+    const dx = a.left - b.left, dy = a.top - b.top;
+    if (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5) el.animate({ transform: [`translate(${dx}px, ${dy}px)`, "none"] }, BAR_MOTION);
   }
 }
 
 function setCompact(on) {
-  if (on && fading) return; // 小さくしている途中
-  if (bar.classList.contains("compact") === on && !fading) return;
-  clearTimeout(fading);
-  fading = null;
-  if (!on || calm.matches) return morphBar(() => bar.classList.toggle("compact", on));
-  const going = [...bar.querySelectorAll(".tools, #status .net, #status .pill.paused")];
-  going.forEach((el) => el.animate({ opacity: [1, 0], transform: ["none", "translateY(-4px)"] },
-                                   { duration: 150, easing: "ease-out", fill: "forwards" }));
-  fading = setTimeout(() => {
-    fading = null;
-    morphBar(() => bar.classList.add("compact"));
-  }, 150);
+  if (bar.classList.contains("compact") !== on) morphBar(() => bar.classList.toggle("compact", on));
 }
 
 function onScroll() {
@@ -327,10 +339,12 @@ function onScroll() {
 addEventListener("scroll", onScroll, { passive: true });
 
 // バーは画面に固定してあるので、大きいときのバーの分だけ本文の上に余白をとる（小さくなっても本文は動かさない）。
-// バー自体の高さは動かしている途中の値になるので、中身（topbar-inner）の下の端から求める
+// 大きいときの高さは、小さいバーを上下の中央に置く枠（--bar-full）にも使う
 function fitHeadSpace() {
-  if (bar.classList.contains("compact") || fading) return;
-  document.body.style.setProperty("--head-space", `${Math.ceil(barInner.getBoundingClientRect().bottom + 1)}px`);
+  if (bar.classList.contains("compact")) return;
+  const height = Math.ceil(barInner.getBoundingClientRect().height);
+  bar.style.setProperty("--bar-full", `${height}px`);
+  document.body.style.setProperty("--head-space", `${Math.ceil(bar.getBoundingClientRect().top) + height}px`);
 }
 new ResizeObserver(fitHeadSpace).observe(barInner);
 addEventListener("resize", fitHeadSpace);
@@ -925,13 +939,11 @@ async function renderMonth(monthArg) {
     <div class="tiles">
       <div class="tile"><div class="label">研究室にいた日数</div><div class="value">${m.stay_days}<small>日</small></div></div>
       <div class="tile"><div class="label">滞在時間の合計</div><div class="value">${esc(fmtDur(m.stay_total))}</div></div>
-      <div class="tile"><div class="label">1日あたりの滞在</div><div class="value">${m.stay_days ? esc(fmtDur(avg)) : "—"}</div>
-        <div class="foot">研究室にいた日の平均</div></div>
-      <div class="tile"><div class="label">PC作業時間の合計</div><div class="value">${esc(fmtDur(m.work_total))}</div>
-        <div class="foot">自宅などでの作業も含む</div></div>
+      <div class="tile"><div class="label">1日あたりの滞在</div><div class="value">${m.stay_days ? esc(fmtDur(avg)) : "—"}</div></div>
+      <div class="tile"><div class="label">PC作業時間の合計</div><div class="value">${esc(fmtDur(m.work_total))}</div></div>
     </div>
     <section class="card">
-      <div class="card-head"><h2>カレンダー</h2><span class="sub">大きい数字：研究室の滞在時間（時:分）／ 小さい数字：PC作業時間 ／ 青い点：日報あり</span></div>
+      <div class="card-head"><h2>カレンダー</h2></div>
       <div class="cal">${["月", "火", "水", "木", "金", "土", "日"].map((w) => `<div class="dow">${w}</div>`).join("")}${cells.join("")}</div>
     </section>`;
   if (cloud) $("#csv").addEventListener("click", () => downloadCSV(m));
@@ -1303,8 +1315,7 @@ function renderSignIn(error) {
 }
 
 function renderFooter() {
-  $("#foot").innerHTML = `<span>OneDrive にある要約を表示しています。アプリ・ファイル・閲覧ページなどの詳しい記録は PC で見られます。</span>
-    ${cloud.build ? `<span>画面の版：${esc(cloud.build)}</span>` : ""}
+  $("#foot").innerHTML = `${cloud.build ? `<span>画面の版：${esc(cloud.build)}</span>` : ""}
     ${cloud.dev ? "" : `<button class="btn btn-sm btn-ghost" id="signout">サインアウト</button>`}`;
   const out = $("#signout");
   if (out) out.addEventListener("click", () => {
