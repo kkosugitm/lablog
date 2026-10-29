@@ -269,12 +269,6 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
   const scrollY = window.scrollY;
   state.tips = [];
   const names = day.category_names;
-  const firstIn = day.stays.length ? day.stays[0].start : null;
-  const lastStay = day.stays[day.stays.length - 1];
-  const outLabel = !lastStay ? "—"
-    : lastStay.state === "in" ? "在学中"
-    : lastStay.state === "tentative" ? `仮退出 ${fmtHMDay(lastStay.end, day.range[0])}`
-    : fmtHMDay(lastStay.end, day.range[0]);
   const loc = day.work_by_location;
   const locText = ["大学", "自宅", "その他"].filter((k) => loc[k] >= 60)
     .map((k) => `${k} ${fmtDur(loc[k])}`).join("・") || "記録なし";
@@ -291,16 +285,8 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
 
     <!-- よく見る部分（メイン）：入退室・時間のタイルと日報 -->
     <div class="main-area">
-    <div class="tiles">
-      <div class="tile"><div class="label">入室</div>
-        <div class="value num">${firstIn ? fmtHM(firstIn) : "—"}</div>
-        <div class="foot">${day.stays.length > 1 ? `出入り ${day.stays.length} 回` : "大学の Wi-Fi に接続した時刻"}</div></div>
-      <div class="tile"><div class="label">退室</div>
-        <div class="value num">${esc(outLabel)}</div>
-        <div class="foot">${lastStay && lastStay.state === "tentative" ? "4時間以内に戻れば滞在が続きます" : "Wi-Fi が切れた時刻"}</div></div>
-      <div class="tile"><div class="label">滞在時間</div>
-        <div class="value">${day.stays.length ? esc(fmtDur(day.stay_total)) : "—"}</div>
-        <div class="foot">PC を閉じていた時間も含む</div></div>
+    <div class="tiles tiles-main">
+      ${stayTileHTML(day)}
       <div class="tile"><div class="label">PC作業時間</div>
         <div class="value">${esc(fmtDur(day.work_total))}</div>
         <div class="foot">${esc(locText)}</div></div>
@@ -369,6 +355,45 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       }
     }, 60000);
   }
+}
+
+// 大学での滞在：入室と退室の時刻を線でつなぎ、その区間の長さ（滞在時間）を真ん中に出す。
+// 1 日に何回か出入りした日は、大学にいた区間だけを塗り、あいだ（大学の外）は点線にする。
+function stayTileHTML(day) {
+  const stays = day.stays, t0 = day.range[0];
+  if (!stays.length) {
+    return `<div class="tile stay-tile"><div class="label">大学での滞在</div>
+      <div class="stay-span empty">
+        <span class="cap">入室</span><span class="total muted">大学には来ていません</span><span class="cap right">退室</span>
+        <span class="t">—</span><span class="track"></span><span class="t right">—</span>
+      </div>
+      <div class="foot">大学の Wi-Fi に接続してから切れるまでが滞在時間です</div></div>`;
+  }
+  const first = stays[0].start, last = stays[stays.length - 1];
+  const end = Math.max(...stays.map((s) => s.end));
+  const pos = (t) => ((t - first) / Math.max(1, end - first)) * 100;
+  const segs = stays.map((s) => {
+    const left = pos(s.start), width = Math.max(1, pos(s.end) - left);
+    const what = s.state === "in" ? "在学中" : s.state === "tentative" ? "仮退出中" : "大学";
+    return `<span class="seg ${esc(s.state)}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"
+      ${tipAttr(`<b>${what}</b><div>${fmtHMDay(s.start, t0)}〜${s.state === "in" ? "いま" : fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
+  }).join("");
+  const exit = last.state === "in" ? { t: "在学中", cap: "いまも大学にいます" }
+    : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cap: "仮退出" }
+    : { t: fmtHMDay(last.end, t0), cap: "退室" };
+  const foot = last.state === "tentative" ? "仮退出から4時間以内に大学の Wi-Fi に戻れば、滞在が続きます"
+    : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（大学の外）は滞在時間に含めません`
+    : "大学の Wi-Fi に接続してから切れるまで（PC を閉じていた時間も含む）";
+  return `<div class="tile stay-tile"><div class="label">大学での滞在</div>
+    <div class="stay-span">
+      <span class="cap">入室</span>
+      <span class="total">${esc(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
+      <span class="cap right">${esc(exit.cap)}</span>
+      <span class="t num">${fmtHMDay(first, t0)}</span>
+      <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i></span>
+      <span class="t num right ${last.state === "in" ? "now" : ""}">${esc(exit.t)}</span>
+    </div>
+    <div class="foot">${foot}</div></div>`;
 }
 
 function timelineHTML(day, names) {
