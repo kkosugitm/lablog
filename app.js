@@ -319,8 +319,11 @@ function morphBar(change) {
       el.animate({ opacity: [0, 1], transform: ["scale(.96)", "none"] }, { ...BAR_MOTION, duration: 460, delay: 120, fill: "backwards" });
       continue;
     }
-    const dx = a.left - b.left, dy = a.top - b.top;
-    if (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5) el.animate({ transform: [`translate(${dx}px, ${dy}px)`, "none"] }, BAR_MOTION);
+    // 位置を滑らせる。大きさが変わる部品（小さいバーのロゴ）は拡大縮小もする
+    const dx = a.left - b.left, dy = a.top - b.top, s = a.height / b.height;
+    if (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5 || Math.abs(s - 1) > 0.01) {
+      el.animate({ transform: [`translate(${dx}px, ${dy}px) scale(${s})`, "none"] }, BAR_MOTION);
+    }
   }
 }
 
