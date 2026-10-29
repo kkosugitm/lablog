@@ -195,6 +195,15 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 /* ---- 日報 ---- */
 .report-meta { font-size: 12px; color: var(--muted); }
 #report-text { min-height: 180px; }
+.md { line-height: 1.75; overflow-wrap: anywhere; }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h3, .md h4, .md h5 { font-size: 14px; font-weight: 700; margin: 16px 0 4px; }
+.md h3 { font-size: 15px; }
+.md p { margin: 6px 0; }
+.md ul, .md ol { margin: 4px 0; padding-left: 1.5em; }
+.md li { margin: 3px 0; }
+.md li::marker { color: var(--muted); }
 
 /* ---- タイムライン ---- */
 .tl { position: relative; padding-left: 64px; }

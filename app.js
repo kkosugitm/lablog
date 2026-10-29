@@ -138,7 +138,7 @@ window.addEventListener("scroll", () => { if (touch) tip.hidden = true; }, { pas
 // ------------------------------------------------------------ 上部バー
 
 const STATE_LABEL = { in: "在学中", tentative: "仮退出中", out: "学外" };
-const NET_LABEL = { univ: "大学", home: "自宅", other: "未登録", offline: "" };
+const NET_LABEL = { univ: "大学", home: "自宅", ignored: "判定に使わない", other: "未登録", offline: "" };
 
 function renderStatus() {
   const s = state.status;
@@ -328,7 +328,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
   if (day.is_today) {
     state.refreshTimer = setTimeout(() => {
       const editing = document.activeElement && ["TEXTAREA", "INPUT"].includes(document.activeElement.tagName);
-      if (editing || state.reportDirty || $("#stay-form")) {
+      if (editing || state.reportEditing || state.reportBusy || $("#stay-form")) {
         state.refreshTimer = setTimeout(() => renderDay(dateArg, { keepScroll: true }), 60000);
       } else {
         renderDay(dateArg, { keepScroll: true }).catch(() => {});
@@ -526,7 +526,7 @@ function webHTML(day, names) {
     </details>`).join("");
 }
 
-// ---- 日報
+// ---- 日報（ふだんは整形して表示し、「編集」で書き換える）
 
 function reportMeta(r) {
   if (!r) return "まだ作成されていません。退出が確定したときと、日付が変わったときに自動で作ります。";
@@ -537,6 +537,64 @@ function reportMeta(r) {
   return `集計から作成した下書き・${when}（ローカルAIを設定すると文章で要約します）`;
 }
 
+// 日報で使うマークダウン（見出し・箇条書き・番号付き・太字・コード・リンク）を HTML にする。
+// 先に文字をエスケープしてから書式を当てるので、日報の中に HTML があっても文字のまま出る。
+function inlineMarkdown(text) {
+  return esc(text)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+}
+
+function renderMarkdown(text) {
+  const out = [], lists = []; // lists: 開いている箇条書き（入れ子）{ tag, indent }
+  let para = [];
+  const flushPara = () => {
+    if (para.length) out.push(`<p>${para.map(inlineMarkdown).join("<br>")}</p>`);
+    para = [];
+  };
+  const closeLists = (indent = -1) => {
+    while (lists.length && lists[lists.length - 1].indent > indent) out.push(`</li></${lists.pop().tag}>`);
+  };
+  for (const line of String(text).replace(/\r/g, "").split("\n")) {
+    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/);
+    const item = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+    if (!line.trim()) {
+      flushPara();
+      closeLists();
+    } else if (heading) {
+      flushPara();
+      closeLists();
+      const tag = `h${Math.min(heading[1].length, 3) + 2}`; // #→h3、##→h4、###→h5（カードの題名が h2）
+      out.push(`<${tag}>${inlineMarkdown(heading[2])}</${tag}>`);
+    } else if (item) {
+      flushPara();
+      const indent = item[1].replace(/\t/g, "    ").length;
+      const tag = /\d/.test(item[2]) ? "ol" : "ul";
+      closeLists(indent);
+      let top = lists[lists.length - 1];
+      if (top && top.indent === indent && top.tag !== tag) {
+        out.push(`</li></${lists.pop().tag}>`);
+        top = lists[lists.length - 1];
+      }
+      if (top && top.indent === indent) {
+        out.push("</li><li>");
+      } else {
+        out.push(`<${tag}><li>`);
+        lists.push({ tag, indent });
+      }
+      out.push(inlineMarkdown(item[3]));
+    } else if (lists.length) {
+      out.push(`<br>${inlineMarkdown(line.trim())}`); // 箇条書きの続きの行
+    } else {
+      para.push(line.trim());
+    }
+  }
+  flushPara();
+  closeLists();
+  return out.join("");
+}
+
 function fitTextarea(ta) {
   ta.style.height = "auto";
   ta.style.height = `${Math.max(180, ta.scrollHeight + 4)}px`;
@@ -544,50 +602,67 @@ function fitTextarea(ta) {
 // 画面の幅が変わったとき（iPhone・iPad の向きを変えたときなど）に日報の欄の高さを合わせ直す
 window.addEventListener("resize", () => { const ta = $("#report-text"); if (ta) fitTextarea(ta); });
 
-function renderReport(day) {
+function renderReport(day, { editing = false } = {}) {
   const card = $("#report-card");
   const r = day.report;
+  const text = (r && r.text) || "";
+  state.reportEditing = editing;
   state.reportDirty = false;
+  const buttons = editing
+    ? `<button class="btn" id="report-cancel">キャンセル</button>
+       <button class="btn btn-primary" id="report-save" disabled>保存</button>`
+    : `${cloud ? "" : `<button class="btn" id="report-gen">${text ? "下書きを作り直す" : "下書きを作成"}</button>`}
+       <button class="btn ${text ? "" : "btn-primary"}" id="report-edit">${text ? "編集" : "書く"}</button>`;
+  const body = editing
+    ? `<textarea id="report-text" placeholder="今日やったことをメモできます。「## 見出し」「- 箇条書き」のように書くと、整えて表示します。">${esc(text)}</textarea>`
+    : text ? `<div class="md">${renderMarkdown(text)}</div>`
+    : `<div class="empty">${cloud ? "「書く」で、この日のメモを残せます。" : "「下書きを作成」で記録から下書きを作ります。「書く」で自分でメモすることもできます。"}</div>`;
   card.innerHTML = `
     <div class="card-head"><h2>日報</h2><span class="report-meta" id="report-meta">${reportMeta(r)}</span>
-      <span class="spacer"></span>
-      ${cloud ? "" : `<button class="btn" id="report-gen">${r && r.text ? "下書きを作り直す" : "下書きを作成"}</button>`}
-      <button class="btn btn-primary" id="report-save" disabled>保存</button></div>
-    <textarea id="report-text" placeholder="ここに今日やったことをメモできます。「下書きを作成」で、記録から自動で下書きを作ります。">${esc(r ? r.text : "")}</textarea>`;
-  const ta = $("#report-text"), save = $("#report-save"), gen = $("#report-gen");
-  const fit = () => fitTextarea(ta);
-  fit();
-  ta.addEventListener("input", () => { state.reportDirty = true; save.disabled = false; fit(); });
-  save.addEventListener("click", async () => {
-    try {
-      await api.post("/api/report/save", { date: day.date, text: ta.value });
-    } catch (err) { alert(err.message); return; }
-    state.reportDirty = false;
-    save.disabled = true;
-    $("#report-meta").textContent = reportMeta({ edited: 1, pending: !!cloud });
-    flash("日報を保存しました");
-  });
+      <span class="spacer"></span>${buttons}</div>
+    ${body}`;
+
+  if (editing) {
+    const ta = $("#report-text"), save = $("#report-save");
+    fitTextarea(ta);
+    ta.focus();
+    ta.addEventListener("input", () => { state.reportDirty = true; save.disabled = false; fitTextarea(ta); });
+    $("#report-cancel").addEventListener("click", () => {
+      if (state.reportDirty && !confirm("書きかけの内容を捨てて戻ります。よろしいですか？")) return;
+      renderReport(day);
+    });
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      try {
+        await api.post("/api/report/save", { date: day.date, text: ta.value });
+      } catch (err) {
+        alert(err.message);
+        save.disabled = false;
+        return;
+      }
+      day.report = { ...(r || {}), text: ta.value, edited: 1, pending: !!cloud };
+      renderReport(day);
+      flash("日報を保存しました");
+    });
+    return;
+  }
+
+  $("#report-edit").addEventListener("click", () => renderReport(day, { editing: true }));
+  const gen = $("#report-gen");
   if (gen) gen.addEventListener("click", async () => {
-    const edited = (r && r.edited) || state.reportDirty;
-    if (edited && !confirm("編集した内容を、記録から作った下書きで置き換えます。よろしいですか？")) return;
+    if (r && r.edited && !confirm("編集した内容を、記録から作った下書きで置き換えます。よろしいですか？")) return;
     gen.disabled = true;
-    save.disabled = true;
-    const label = gen.textContent;
+    $("#report-edit").disabled = true;
     gen.textContent = "作成中…";
     $("#report-meta").textContent = "作成中です。ローカルAIを使う場合は1分前後かかります。";
+    state.reportBusy = true;
     try {
-      const res = await api.post("/api/report/generate", { date: day.date, force: true });
-      ta.value = res.text || "";
-      fit();
-      state.reportDirty = false;
-      $("#report-meta").innerHTML = reportMeta(res);
-      day.report = res;
+      day.report = await api.post("/api/report/generate", { date: day.date, force: true });
     } catch (err) {
       alert(err.message);
-      $("#report-meta").innerHTML = reportMeta(r);
     } finally {
-      gen.disabled = false;
-      gen.textContent = label;
+      state.reportBusy = false;
+      renderReport(day);
     }
   });
 }
@@ -686,7 +761,8 @@ async function renderSettings() {
   const { settings: s, data_dir: dataDir, repos, ssids } = await loadSettings();
   const current = ssids && ssids[0];
   const where = !current ? "未接続" : s.wifi.univ.includes(current) ? "大学として登録済み"
-    : s.wifi.home.includes(current) ? "自宅として登録済み" : "未登録";
+    : s.wifi.home.includes(current) ? "自宅として登録済み"
+    : s.wifi.ignore.includes(current) ? "判定に使わない Wi-Fi として登録済み" : "未登録";
   const ssidList = (kind) => s.wifi[kind].length ? s.wifi[kind].map((x) => `
       <div class="set-item"><span class="main">${esc(x)}</span>
       <button class="icon-btn" data-wifi-remove="${esc(kind)}" data-ssid="${esc(x)}" aria-label="${esc(x)} を削除">✕</button></div>`).join("")
@@ -703,10 +779,13 @@ async function renderSettings() {
         <div class="row">
           <button class="btn btn-primary" data-wifi-register="univ" ${current ? "" : "disabled"}>大学として登録</button>
           <button class="btn" data-wifi-register="home" ${current ? "" : "disabled"}>自宅として登録</button>
+          <button class="btn" data-wifi-register="ignore" ${current ? "" : "disabled"}>判定に使わない</button>
         </div>
-        <p class="help">研究室専用の Wi-Fi と大学共通の Wi-Fi は、どちらも「大学」として登録してください。</p>
+        <p class="help">研究室専用の Wi-Fi と大学共通の Wi-Fi は、どちらも「大学」として登録してください。
+          iPhone のテザリングなど、大学でも大学の外でも使う Wi-Fi は「判定に使わない」にします。つないでいる間は、直前の状態（在学中・仮退出中）をそのまま続けます。</p>
         <h3 class="help" style="margin-top:12px">大学</h3><div class="set-list">${ssidList("univ")}</div>
         <h3 class="help">自宅</h3><div class="set-list">${ssidList("home")}</div>
+        <h3 class="help">判定に使わない</h3><div class="set-list">${ssidList("ignore")}</div>
       </section>
 
       <section class="card">
