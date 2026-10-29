@@ -143,10 +143,10 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   .topbar .tabs a { padding-left: 10px; padding-right: 10px; }
   .topbar #pause { padding-left: 10px; padding-right: 10px; }
 }
-/* iPhone・iPad（iOS 26）：ページは時計の下から始まり、時計のすぐ下には「ぼかし」がかかる。
-   浮いたヘッダーはぼかしの範囲より下（ページの上の端から 18px）に置いて縁をくっきりさせる */
+/* iPhone・iPad（iOS 26）：ページは時計の下から始まり、ページの上の端から約 30pt には iOS が「ぼかし」をかける
+   （ページ側からは消せない）。浮いたヘッダーはその範囲より下（32px）に置いて縁をくっきりさせる */
 @supports (-webkit-touch-callout: none) {
-  .topbar { top: calc(env(safe-area-inset-top, 0px) + 18px); margin-top: calc(env(safe-area-inset-top, 0px) + 18px); }
+  .topbar { top: calc(env(safe-area-inset-top, 0px) + 32px); margin-top: calc(env(safe-area-inset-top, 0px) + 32px); }
 }
 .tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
 .tabs a {
