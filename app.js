@@ -229,6 +229,7 @@ async function refreshStatus() {
 
 $("#pause").addEventListener("click", async () => {
   if (cloud) { // ビューアーでは「更新」ボタン：画面のファイルごと読み直す（ホーム画面アプリには再読み込みがないため）
+    $("#pause").classList.add("spinning");
     cloud.clearCache();
     location.reload();
     return;
@@ -368,6 +369,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
 // 入る（扉に向かう矢印）・出る（扉から出る矢印）のアイコン
 const ICON_IN = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="m10 17 5-5-5-5"/><path d="M15 12H3"/></svg>`;
 const ICON_OUT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>`;
+const ICON_RELOAD = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
 
 function stayTileHTML(day) {
   const stays = day.stays, t0 = day.range[0];
@@ -1180,7 +1182,11 @@ window.addEventListener("hashchange", route);
 (async () => {
   if (cloud) {
     $("[data-tab=settings]").remove();
-    $("#pause").textContent = "更新";
+    const reload = $("#pause");
+    reload.innerHTML = ICON_RELOAD;
+    reload.classList.add("btn-icon");
+    reload.setAttribute("aria-label", "更新");
+    reload.title = "更新";
     const { signedIn, error } = await cloud.ready();
     if (!signedIn) return renderSignIn(error);
     renderFooter();
