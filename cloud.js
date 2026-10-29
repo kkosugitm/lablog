@@ -389,5 +389,5 @@ window.LabLogCloud = (() => {
     mem.clear();
   }
 
-  return { api, ready, signIn: () => signIn(), signOut, clearCache, dev: !!cfg.dev };
+  return { api, ready, signIn: () => signIn(), signOut, clearCache, dev: !!cfg.dev, build: cfg.build || "" };
 })();

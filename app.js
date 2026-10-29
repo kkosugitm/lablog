@@ -228,11 +228,9 @@ async function refreshStatus() {
 }
 
 $("#pause").addEventListener("click", async () => {
-  if (cloud) { // ビューアーでは「更新」ボタン
+  if (cloud) { // ビューアーでは「更新」ボタン：画面のファイルごと読み直す（ホーム画面アプリには再読み込みがないため）
     cloud.clearCache();
-    await refreshStatus();
-    await route();
-    flash("最新の内容を読み込みました");
+    location.reload();
     return;
   }
   const paused = !(state.status && state.status.paused);
@@ -1166,6 +1164,7 @@ function renderSignIn(error) {
 
 function renderFooter() {
   $("#foot").innerHTML = `<span>OneDrive にある要約を表示しています。アプリ・ファイル・閲覧ページなどの詳しい記録は PC で見られます。</span>
+    ${cloud.build ? `<span>画面の版：${esc(cloud.build)}</span>` : ""}
     ${cloud.dev ? "" : `<button class="btn btn-sm btn-ghost" id="signout">サインアウト</button>`}`;
   const out = $("#signout");
   if (out) out.addEventListener("click", () => {
