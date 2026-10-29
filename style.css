@@ -5,9 +5,10 @@
   --page: #ecece8;
   --surface: #fcfcfb;
   /* 上部バー：本文（灰色の地とカード）とはっきり分かれる白い帯にする */
-  --header: rgba(255, 255, 255, 0.62);
-  --header-line: rgba(11, 11, 11, 0.08);
-  --header-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -14px rgba(0, 0, 0, 0.25);
+  /* ヘッダーはカードより明るく、影を濃くして一段手前に浮かせる */
+  --header: rgba(255, 255, 255, 0.84);
+  --header-line: rgba(255, 255, 255, 0.9);
+  --header-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 14px 36px -12px rgba(0, 0, 0, 0.3);
   /* 作業量の演出で、壁紙の上に重ねるすりガラスのカード */
   --glass: rgba(252, 252, 251, 0.76);
   --glass-strong: rgba(252, 252, 251, 0.88);
@@ -47,9 +48,9 @@
     color-scheme: dark;
     --page: #0a0a0a;
     --surface: #1a1a19;
-    --header: rgba(44, 44, 43, 0.58);
-    --header-line: rgba(255, 255, 255, 0.11);
-    --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -10px rgba(0, 0, 0, 0.8);
+    --header: rgba(78, 78, 80, 0.62);
+    --header-line: rgba(255, 255, 255, 0.16);
+    --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 14px 36px -10px rgba(0, 0, 0, 0.85);
     --glass: rgba(26, 26, 25, 0.70);
     --glass-strong: rgba(26, 26, 25, 0.84);
     --w-dim: 0.75;
@@ -98,16 +99,22 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .hidden { display: none !important; }
 
 /* ---- 上部バー ---- */
-/* 角丸の半透明の帯を、上と左右に少し間をあけて浮かせる（本文と同じ幅にそろえる） */
+/* 角丸の半透明の帯を、上と左右に少し間をあけて浮かせる。本文（幅 1148px）より左右に少しはみ出させて格上に見せる */
 .topbar {
   position: sticky; top: 10px; z-index: 10;
-  width: calc(100% - 32px); max-width: 1148px; margin: 10px auto 0;
+  width: calc(100% - 16px); max-width: 1196px; margin: 10px auto 0;
   border-radius: 16px;
   background: var(--header);
   -webkit-backdrop-filter: blur(20px) saturate(1.8);
   backdrop-filter: blur(20px) saturate(1.8);
   border: 1px solid var(--header-line);
   box-shadow: var(--header-shadow);
+}
+/* iPhone・iPad の Safari は、画面の上端に固定された部品の色で時計の帯を塗る。
+   ヘッダーを浮かせて上に隙間ができると、後ろの壁紙がぼやけて映るので、上端に地の色の細い帯を固定する */
+@supports (-webkit-touch-callout: none) {
+  body::before { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 8px; z-index: 9;
+                 background: var(--page); }
 }
 .topbar-inner {
   padding: 10px 14px;
@@ -133,7 +140,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .pill.stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
 .status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
-  .topbar { width: calc(100% - 20px); top: 8px; margin-top: 8px; border-radius: 14px; }
+  .topbar { width: calc(100% - 16px); top: 8px; margin-top: 8px; border-radius: 14px; }
   .topbar-inner { gap: 8px; padding: 8px 10px; }
   .status { order: 5; flex-basis: 100%; }
   .tabs { margin-left: auto; }
