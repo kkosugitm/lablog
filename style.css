@@ -5,9 +5,9 @@
   --page: #ecece8;
   --surface: #fcfcfb;
   /* 上部バー：本文（灰色の地とカード）とはっきり分かれる白い帯にする */
-  --header: rgba(255, 255, 255, 0.86);
-  --header-line: rgba(11, 11, 11, 0.09);
-  --header-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -14px rgba(0, 0, 0, 0.22);
+  --header: rgba(255, 255, 255, 0.62);
+  --header-line: rgba(11, 11, 11, 0.08);
+  --header-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 12px 32px -14px rgba(0, 0, 0, 0.25);
   /* 作業量の演出で、壁紙の上に重ねるすりガラスのカード */
   --glass: rgba(252, 252, 251, 0.76);
   --glass-strong: rgba(252, 252, 251, 0.88);
@@ -47,9 +47,9 @@
     color-scheme: dark;
     --page: #0a0a0a;
     --surface: #1a1a19;
-    --header: rgba(36, 36, 35, 0.86);
-    --header-line: rgba(255, 255, 255, 0.10);
-    --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 28px -10px rgba(0, 0, 0, 0.8);
+    --header: rgba(44, 44, 43, 0.58);
+    --header-line: rgba(255, 255, 255, 0.11);
+    --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 12px 32px -10px rgba(0, 0, 0, 0.8);
     --glass: rgba(26, 26, 25, 0.70);
     --glass-strong: rgba(26, 26, 25, 0.84);
     --w-dim: 0.75;
@@ -98,16 +98,19 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .hidden { display: none !important; }
 
 /* ---- 上部バー ---- */
+/* 角丸の半透明の帯を、上と左右に少し間をあけて浮かせる（本文と同じ幅にそろえる） */
 .topbar {
-  position: sticky; top: 0; z-index: 10;
+  position: sticky; top: 10px; z-index: 10;
+  width: calc(100% - 32px); max-width: 1148px; margin: 10px auto 0;
+  border-radius: 16px;
   background: var(--header);
-  -webkit-backdrop-filter: blur(18px) saturate(1.6);
-  backdrop-filter: blur(18px) saturate(1.6);
-  border-bottom: 1px solid var(--header-line);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid var(--header-line);
   box-shadow: var(--header-shadow);
 }
 .topbar-inner {
-  max-width: 1180px; margin: 0 auto; padding: 10px 16px;
+  padding: 10px 14px;
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
 }
 .brand { display: inline-flex; align-items: center; gap: 7px;
@@ -130,7 +133,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 .pill.stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
 .status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
-  .topbar-inner { gap: 8px 10px; }
+  .topbar { width: calc(100% - 20px); top: 8px; margin-top: 8px; border-radius: 14px; }
+  .topbar-inner { gap: 8px; padding: 8px 10px; }
   .status { order: 5; flex-basis: 100%; }
   .tabs { margin-left: auto; }
   /* 文字が大きくても「ロゴ・タブ・ボタン」が 1 段に収まるよう、余白だけ詰める */
@@ -197,6 +201,16 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .signin .notice { text-align: left; }
 .page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .page-head h1 { font-size: calc(20px * var(--fs)); margin-right: 4px; }
+/* 日付の見出し：押すとカレンダーが開く（透明な日付の入力欄を重ねている） */
+.date-pick { position: relative; display: inline-flex; align-items: center; padding: 2px 8px; margin: 0 -4px;
+             border-radius: 10px; cursor: pointer; }
+.date-pick:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.date-pick h1 { display: inline-flex; align-items: center; gap: 6px; margin: 0; }
+.date-pick .chev { width: 18px; height: 18px; fill: none; stroke: var(--muted); stroke-width: 2.4;
+                   stroke-linecap: round; stroke-linejoin: round; }
+.date-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer;
+                   border: 0; padding: 0; margin: 0; }
+.date-pick:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .span-2 { grid-column: 1 / -1; }
 @media (max-width: 900px) { .grid { grid-template-columns: minmax(0, 1fr); } }
@@ -286,7 +300,9 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .tag.warn { background: color-mix(in srgb, var(--warning) 22%, transparent); color: var(--ink); }
 
 /* ---- 日報 ---- */
-.report-meta { font-size: calc(12px * var(--fs)); color: var(--muted); }
+/* 日報：タイトルとボタンを 1 行目（ボタンは右上）、作成日時などの説明をその下に置く */
+.report-head { flex-wrap: nowrap; margin-bottom: 4px; }
+.report-meta { font-size: calc(12px * var(--fs)); color: var(--muted); margin-bottom: 14px; }
 #report-text { min-height: 180px; }
 .md { line-height: 1.75; overflow-wrap: anywhere; }
 .md > :first-child { margin-top: 0; }

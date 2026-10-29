@@ -279,10 +279,12 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
   view.innerHTML = `
     <div class="page-head">
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, -1)}" aria-label="前の日">‹</a>
-      <h1>${esc(day.date_label)}</h1>
+      <label class="date-pick" title="日付を選ぶ">
+        <h1>${esc(day.date_label)}<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></h1>
+        <input type="date" id="pick-date" value="${esc(day.date)}" aria-label="日付を選ぶ">
+      </label>
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
       ${day.is_today ? "" : `<a class="btn" href="#/day/${today}">今日</a>`}
-      <input type="date" id="pick-date" value="${esc(day.date)}" aria-label="日付を選ぶ">
       ${levelHTML(day)}
     </div>
 
@@ -342,7 +344,10 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
 
   setLevel(levelOf(effortSec(day.work_total, day.stay_total)));
   renderReport(day);
-  $("#pick-date").addEventListener("change", (e) => { if (e.target.value) location.hash = `#/day/${e.target.value}`; });
+  // 日付の見出しの上に透明な日付の入力欄を重ねてある。押すとカレンダーが開く
+  const pick = $("#pick-date");
+  pick.addEventListener("change", (e) => { if (e.target.value) location.hash = `#/day/${e.target.value}`; });
+  pick.addEventListener("click", () => { try { pick.showPicker(); } catch { /* 対応していないブラウザは標準の動き */ } });
   $("#add-stay").addEventListener("click", () => openStayForm(day, null));
   $$("[data-edit-stay]").forEach((b) => b.addEventListener("click", () =>
     openStayForm(day, day.stays.find((s) => s.id === Number(b.dataset.editStay)))));
@@ -697,8 +702,8 @@ function renderReport(day, { editing = false } = {}) {
     : text ? `<div class="md">${renderMarkdown(text)}</div>`
     : `<div class="empty">${cloud ? "「書く」で、この日のメモを残せます。" : "「下書きを作成」で記録から下書きを作ります。「書く」で自分でメモすることもできます。"}</div>`;
   card.innerHTML = `
-    <div class="card-head"><h2>日報</h2><span class="report-meta" id="report-meta">${reportMeta(r)}</span>
-      <span class="spacer"></span>${buttons}</div>
+    <div class="card-head report-head"><h2>日報</h2><span class="spacer"></span>${buttons}</div>
+    <div class="report-meta" id="report-meta">${reportMeta(r)}</div>
     ${body}`;
 
   if (editing) {
