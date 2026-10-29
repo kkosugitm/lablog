@@ -88,6 +88,28 @@ function flash(msg) {
   setTimeout(() => el.remove(), 2600);
 }
 
+// ---- 作業量の演出：その日の作業時間で、背景（壁紙）とカードを少しずつ豪華にする（style.css）
+
+const LEVEL_HOURS = [1, 3, 5, 7]; // この時間を超えるごとに 1 段階ずつ上がる（最大 4）
+// PC作業時間を中心に、大学に長くいた日（PC を閉じてゼミに出ていたなど）も少し上がるようにする
+const effortSec = (work, stay) => Math.max(work || 0, (stay || 0) * 0.75);
+const levelOf = (sec) => LEVEL_HOURS.filter((h) => sec >= h * HOUR).length;
+// 見た目を確かめるときは、URL に ?level=0〜4 を付けると段階を、?theme=light で明るい表示を固定できる
+const preview = new URLSearchParams(location.search);
+const forcedLevel = /^[0-4]$/.test(preview.get("level") || "") ? preview.get("level") : null;
+if (preview.get("theme") === "light") document.documentElement.dataset.theme = "light";
+function setLevel(level) { document.body.dataset.level = forcedLevel ?? String(level); }
+
+function levelHTML(day) {
+  const sec = effortSec(day.work_total, day.stay_total);
+  const level = forcedLevel != null ? Number(forcedLevel) : levelOf(sec);
+  const next = LEVEL_HOURS[level];
+  const tipHtml = `<b>この日の段階 ${level} / 4</b><div>PC作業 ${fmtDur(day.work_total)}・滞在 ${fmtDur(day.stay_total)}</div>`
+    + `<div class="muted">${next ? `あと ${fmtDur(next * HOUR - sec)} で次の段階（背景が変わります）` : "いちばん上の段階です"}</div>`;
+  return `<span class="level" ${tipAttr(tipHtml)} role="img" aria-label="この日の段階 ${level} / 4">${
+    [0, 1, 2, 3].map((i) => `<i class="${i < level ? "on" : ""}"></i>`).join("")}</span>`;
+}
+
 // 分類の色：設定の順番で固定。9 番目以降と「その他」はグレー。
 function catColor(name, names) {
   if (name === "idle") return "var(--c-idle)";
@@ -230,7 +252,7 @@ async function route() {
   const [, page, arg] = (location.hash || "#/day").split("/");
   try {
     if (page === "month") { setTab("month"); await renderMonth(arg); }
-    else if (page === "settings" && !cloud) { setTab("settings"); await renderSettings(); }
+    else if (page === "settings" && !cloud) { setTab("settings"); setLevel(0); await renderSettings(); }
     else { setTab("day"); await renderDay(arg); }
   } catch (e) {
     if (e.name === "SignInRequired") return renderSignIn();
@@ -264,6 +286,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
       ${day.is_today ? "" : `<a class="btn" href="#/day/${today}">今日</a>`}
       <input type="date" id="pick-date" value="${esc(day.date)}" aria-label="日付を選ぶ">
+      ${levelHTML(day)}
     </div>
 
     <div class="tiles">
@@ -323,6 +346,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       </section>`}
     </div>`;
 
+  setLevel(levelOf(effortSec(day.work_total, day.stay_total)));
   renderReport(day);
   $("#pick-date").addEventListener("change", (e) => { if (e.target.value) location.hash = `#/day/${e.target.value}`; });
   $("#add-stay").addEventListener("click", () => openStayForm(day, null));
@@ -733,6 +757,9 @@ async function renderMonth(monthArg) {
       <div class="cal">${["月", "火", "水", "木", "金", "土", "日"].map((w) => `<div class="dow">${w}</div>`).join("")}${cells.join("")}</div>
     </section>`;
   if (cloud) $("#csv").addEventListener("click", () => downloadCSV(m));
+  // 月の画面は、作業した日の平均で段階を決める
+  const active = m.days.filter((d) => d.work >= 600 || d.stay > 0);
+  setLevel(active.length ? levelOf(active.reduce((sum, d) => sum + effortSec(d.work, d.stay), 0) / active.length) : 0);
 }
 
 // PC の「CSV で書き出す」と同じ形式（Excel で文字化けしないよう BOM 付き）
@@ -1080,6 +1107,7 @@ function catRowHTML(c, i, names) {
 
 function renderSignIn(error) {
   clearTimeout(state.refreshTimer);
+  setLevel(0);
   $(".tabs").classList.add("hidden");
   $("#pause").classList.add("hidden");
   $("#status").innerHTML = "";

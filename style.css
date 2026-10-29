@@ -2,8 +2,16 @@
 
 :root {
   color-scheme: light;
-  --page: #f9f9f7;
+  --page: #ecece8;
   --surface: #fcfcfb;
+  /* 上部バー：本文（灰色の地とカード）とはっきり分かれる白い帯にする */
+  --header: rgba(255, 255, 255, 0.86);
+  --header-line: rgba(11, 11, 11, 0.09);
+  --header-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -14px rgba(0, 0, 0, 0.22);
+  /* 作業量の演出で、壁紙の上に重ねるすりガラスのカード */
+  --glass: rgba(252, 252, 251, 0.76);
+  --glass-strong: rgba(252, 252, 251, 0.88);
+  --w-dim: 1;
   --surface-2: #f2f1ed;
   --border: rgba(11, 11, 11, 0.10);
   --ink: #0b0b0b;
@@ -30,8 +38,14 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --page: #0d0d0d;
+    --page: #0a0a0a;
     --surface: #1a1a19;
+    --header: rgba(36, 36, 35, 0.86);
+    --header-line: rgba(255, 255, 255, 0.10);
+    --header-shadow: 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 28px -10px rgba(0, 0, 0, 0.8);
+    --glass: rgba(26, 26, 25, 0.70);
+    --glass-strong: rgba(26, 26, 25, 0.84);
+    --w-dim: 0.75;
     --surface-2: #232321;
     --border: rgba(255, 255, 255, 0.10);
     --ink: #f0efec;
@@ -73,9 +87,11 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 /* ---- 上部バー ---- */
 .topbar {
   position: sticky; top: 0; z-index: 10;
-  background: color-mix(in srgb, var(--page) 88%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  background: var(--header);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  backdrop-filter: blur(18px) saturate(1.6);
+  border-bottom: 1px solid var(--header-line);
+  box-shadow: var(--header-shadow);
 }
 .topbar-inner {
   max-width: 1180px; margin: 0 auto; padding: 10px 16px;
@@ -305,3 +321,58 @@ details.group .inner .list-item { font-size: 13px; padding: 4px 0; border-bottom
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60;
   background: var(--ink); color: var(--page); padding: 8px 16px; border-radius: 8px; font-size: 13px;
 }
+
+/* ---- 作業量の演出 ----
+   その日の作業時間で body[data-level] が 0〜4 に変わる（app.js の LEVEL_HOURS）。
+   0 は地味なまま。1 から壁紙の光が出て、カードがすりガラスになり、4 で最も鮮やかに・ゆっくり動く。
+   分類の色（タイムライン・横棒）は意味を持つので変えない。変えるのは背景とカード・タイルだけ。 */
+#wallpaper { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+#wallpaper i {
+  position: absolute; width: 90vmax; height: 90vmax; border-radius: 50%;
+  opacity: calc(var(--w-opacity, 0) * var(--w-dim));
+  transition: opacity 1.2s ease;
+  will-change: transform;
+}
+#wallpaper i:nth-child(1) { left: -38vmax; top: -48vmax; background: radial-gradient(closest-side, var(--wa, transparent), transparent); }
+#wallpaper i:nth-child(2) { right: -42vmax; top: -30vmax; background: radial-gradient(closest-side, var(--wb, transparent), transparent); }
+#wallpaper i:nth-child(3) { left: -20vmax; bottom: -55vmax; background: radial-gradient(closest-side, var(--wc, transparent), transparent); }
+#wallpaper i:nth-child(4) { right: -35vmax; bottom: -50vmax; background: radial-gradient(closest-side, var(--wd, transparent), transparent); }
+body[data-level="1"] { --w-opacity: .55; --wa: #9cc8ff; --wb: #b7ecdc; }
+body[data-level="2"] { --w-opacity: .7; --wa: #78aaff; --wb: #8fe0c8; --wc: #c7b8ff; }
+body[data-level="3"] { --w-opacity: .85; --wa: #5b8cff; --wb: #a98bff; --wc: #ff9fd8; --wd: #ffc07a; }
+body[data-level="4"] { --w-opacity: 1; --wa: #2f6bff; --wb: #9b3cff; --wc: #ff4fa3; --wd: #ff8a2a; }
+
+/* 壁紙が出ているときは、カードを半透明のすりガラスにして光を透かす */
+body[data-level]:not([data-level="0"]) :is(.card, .tile, .notice, .cal .cell:not(.blank)) {
+  background: var(--glass-bg, var(--glass));
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+}
+/* たくさん作業した日（段階 3・4）は、数値のタイルに光る縁取り */
+body[data-level="3"] .tile, body[data-level="4"] .tile {
+  --glass-bg: linear-gradient(var(--glass-strong), var(--glass-strong)) padding-box,
+              linear-gradient(135deg, var(--wa), var(--wb), var(--wc), var(--wd)) border-box;
+  border-color: transparent;
+  box-shadow: 0 14px 36px -18px var(--wb);
+}
+body[data-level="4"] .tile { border-width: 1.5px; }
+body[data-level="4"] .card { box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 18px 40px -28px var(--wa); }
+body[data-level="4"] #wallpaper i { animation: drift 38s ease-in-out infinite alternate; }
+body[data-level="4"] #wallpaper i:nth-child(even) { animation-duration: 46s; animation-direction: alternate-reverse; }
+@keyframes drift {
+  from { transform: translate(-4vmax, -3vmax) scale(1); }
+  to   { transform: translate(5vmax, 4vmax) scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-level="4"] #wallpaper i { animation: none; }
+  #wallpaper i { transition: none; }
+}
+body[data-level]:not([data-level="0"]) .foot { color: var(--ink-2); }
+
+/* 日別の見出しの横の「今日の段階」（4 つの目盛り） */
+.level { display: inline-flex; align-items: center; gap: 3px; padding: 7px 9px; border-radius: 999px;
+         background: var(--surface-2); cursor: default; }
+.level i { width: 14px; height: 6px; border-radius: 3px; background: var(--axis); }
+.level i.on { background: linear-gradient(90deg, #4f86ff, #a06bff); }
+.level i.on:nth-child(3) { background: linear-gradient(90deg, #a06bff, #ff5fa8); }
+.level i.on:nth-child(4) { background: linear-gradient(90deg, #ff5fa8, #ff9a3c); }
