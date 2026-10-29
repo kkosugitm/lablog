@@ -81,7 +81,9 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   max-width: 1180px; margin: 0 auto; padding: 10px 16px;
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
 }
-.brand { font-weight: 750; font-size: 16px; color: var(--ink); letter-spacing: .02em; }
+.brand { display: inline-flex; align-items: center; gap: 7px;
+         font-weight: 750; font-size: 16px; color: var(--ink); letter-spacing: .02em; }
+.brand img { display: block; flex: none; }
 .brand:hover { text-decoration: none; }
 .status { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; flex-wrap: wrap; }
 .pill {
