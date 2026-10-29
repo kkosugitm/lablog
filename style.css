@@ -1,5 +1,10 @@
 /* LabLog ダッシュボード（PC と iPhone・iPad 用ビューアーで共通）。外部のフォントや CDN は使わない。 */
 
+/* 日報の手書き風の文字：Klee One（SIL Open Font License。fonts/OFL.txt）。
+   日本語の常用範囲（JIS 第 1・第 2 水準など）だけに絞って同梱している。範囲外の字は次の候補のフォントで出る */
+@font-face { font-family: "Klee One"; src: url("fonts/KleeOne-Regular.woff2") format("woff2");
+             font-weight: 400; font-display: swap; }
+
 :root {
   color-scheme: light;
   --page: #ecece8;
@@ -104,7 +109,7 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
 
 /* ---- 上部バー ---- */
 /* 画面の上に固定する。ページの一番上では背景に溶け込ませ（at-top）、少しでも下がったら角丸の半透明の帯にして浮かせる。
-   下へ送っているあいだは小さく（compact：ロゴ・在室の表示・日/月だけ。幅も中身に合わせて縮める）、
+   下へ送っているあいだは小さく（compact：ロゴ・日/月だけ。幅も中身に合わせて縮める）、
    上へ戻し始めたら元に戻す（app.js の「上部バー」）。本文（幅 1148px）より左右に少しはみ出させて格上に見せる。
    .topbar は大きいときの大きさの枠（--bar-full）で、小さいバーはその上下・左右の中央に置く。
    帯の見た目（すりガラス・縁・影）は中身の後ろに敷いた .topbar-bg が受け持ち、大きさを変えるときはこれだけを伸び縮みさせる。
@@ -152,7 +157,7 @@ body { padding-top: var(--head-space, 64px); }
 .pill.tentative .dot { background: var(--warning); }
 .pill.paused { background: color-mix(in srgb, var(--critical) 14%, transparent); color: var(--critical); }
 .pill.paused .dot { background: var(--critical); }
-.pill.stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
+:is(.pill, .net).stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
 .status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 700px) {
   /* スマホ幅では大きいバーが 2 段になるので、小さいバーは上下の中央ではなく、大きいバーの上の端にそろえる */
@@ -167,7 +172,7 @@ body { padding-top: var(--head-space, 64px); }
 @supports (-webkit-touch-callout: none) {
   .topbar { top: calc(env(safe-area-inset-top, 0px) + 32px); }
 }
-/* 小さいバー：1 段にして、ロゴ・在室の表示・日/月だけを出す。幅は中身に合わせ、両端は丸く */
+/* 小さいバー：1 段にして、ロゴ・日/月だけを出す。幅は中身に合わせ、両端は丸く */
 .topbar.compact .topbar-inner { width: auto; padding: 6px 6px 6px 14px; gap: 8px; flex-wrap: nowrap; }
 .topbar.compact :is(.tools, .status .net, .status .pill.paused) { display: none; }
 .topbar.compact .brand { font-size: calc(16px * var(--fs)); gap: 7px; }
@@ -175,10 +180,6 @@ body { padding-top: var(--head-space, 64px); }
 /* 大きさが変わるとき、部品は左上を基準に動かす・拡大縮小する（app.js の morphBar） */
 .topbar :is(.brand, .tabs, .tools, #status > *) { transform-origin: left top; }
 .topbar.compact .status { order: 0; flex: 0 1 auto; overflow: hidden; }
-/* 在室の表示の時刻は、小さいバーでは横に畳んで「在室中」だけにする（幅を縮めるため） */
-.pill .since { display: inline-block; max-width: 6em; margin-left: -6px; overflow: hidden; white-space: nowrap; vertical-align: top;
-               transition: max-width .56s var(--ease-soft), opacity .3s ease; }
-.topbar.compact .pill .since { max-width: 0; opacity: 0; }
 /* 帯の角に合わせて、日/月の切り替えとアイコンのボタンも丸くする */
 .tabs { display: flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 999px; }
 .tabs a {
@@ -314,6 +315,10 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .card-head h2, .tile .label {
   font-size: calc(20px * var(--fs)); font-weight: 700; line-height: 1.3; letter-spacing: .02em; color: var(--title);
 }
+/* タイトルの前のアイコン（app.js の TITLE_ICONS。タイトルの文字から自動で付ける） */
+.has-icon { display: flex; align-items: center; gap: 8px; }
+.title-icon { width: 1.05em; height: 1.05em; flex: none; fill: none; stroke: currentColor; stroke-width: 2;
+              stroke-linecap: round; stroke-linejoin: round; }
 /* ブロックの中の小見出し（Git の「いまの状態」など）は中身の側の見た目 */
 .inner-title { font-size: calc(14px * var(--fs)); font-weight: 700; margin: 16px 0 6px; }
 .card-head .sub { color: var(--muted); font-size: calc(12.5px * var(--fs)); }

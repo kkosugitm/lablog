@@ -197,7 +197,6 @@ window.addEventListener("scroll", () => { if (touch) tip.hidden = true; }, { pas
 
 // ------------------------------------------------------------ 上部バー
 
-const STATE_LABEL = { in: "在室中", tentative: "仮退出中", out: "不在" };
 const NET_LABEL = { univ: "研究室", home: "自宅", ignored: "判定に使わない", other: "未登録", offline: "" };
 // 記録の中の場所の名前（"大学" など）は変えず、表示するときだけ置き換える
 const PLACE_LABEL = { "大学": "研究室" };
@@ -211,9 +210,7 @@ function renderStatus() {
   if (s.paused) {
     parts.push(`<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>`);
   }
-  // 時刻は小さいバーでは畳む（style.css の .since）
-  const since = ["in", "tentative"].includes(s.state) ? `<span class="since">（${fmtHM(s.since)}〜）</span>` : "";
-  parts.push(`<span class="pill ${esc(s.state)}"><span class="dot"></span>${STATE_LABEL[s.state] || ""}${since}</span>`);
+  // 在室中かどうかは研究室のタイルに出すので、上部バーには Wi-Fi だけを出す
   const net = s.ssids && s.ssids.length
     ? `Wi-Fi：${esc(s.ssids.join(", "))}${NET_LABEL[s.net] ? `（${NET_LABEL[s.net]}）` : ""}`
     : "Wi-Fi：未接続";
@@ -234,9 +231,7 @@ function renderCloudStatus(s) {
   if (s.paused) parts.push(`<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>`);
   if (s.state !== "none") {
     const stale = s.exported && Date.now() / 1000 - s.exported > 15 * 60;
-    const since = ["in", "tentative"].includes(s.state) && s.since ? `<span class="since">（${fmtHM(s.since)}〜）</span>` : "";
-    parts.push(`<span class="pill ${esc(s.state)} ${stale ? "stale" : ""}"><span class="dot"></span>${STATE_LABEL[s.state] || ""}${since}</span>`);
-    parts.push(`<span class="net">PC の最終更新：${s.exported ? fmtWhen(s.exported) : "—"}</span>`);
+    parts.push(`<span class="net ${stale ? "stale" : ""}">PC の最終更新：${s.exported ? fmtWhen(s.exported) : "—"}</span>`);
   }
   $("#status").innerHTML = parts.join("");
   renderNotices();
@@ -283,7 +278,7 @@ $("#pause").addEventListener("click", async () => {
 });
 
 // ページの一番上では背景に溶け込ませ、少しでも下がったら角丸で浮かせる。下へ送っているあいだは小さく
-// （ロゴ・在室の表示・日/月だけ）、上へ戻し始めたら元の大きさに戻す（style.css の at-top・compact）。
+// （ロゴ・日/月だけ）、上へ戻し始めたら元の大きさに戻す（style.css の at-top・compact）。
 // 大きさが変わるときは、帯（.topbar-bg）を古い形から新しい形へ伸び縮みさせ、残る部品は新しい位置まで滑らせる。
 // 消える部品は写しを元の場所に残して薄く消し、現れる部品は少し遅れて浮かび上がらせる。すべて同時に動かす
 const bar = $(".topbar"), barInner = $(".topbar-inner"), barBg = $(".topbar-bg");
@@ -561,6 +556,52 @@ const ICON_OUT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2
 const ICON_RELOAD = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>`;
 const ICON_STOP = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/></svg>`;
 const ICON_PLAY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>`;
+
+// ブロックのタイトルの前に付けるアイコン（線で描く 24×24）。タイトルの文字で選ぶ
+const FOLDER = "M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z";
+const CALENDAR = '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>';
+const LAPTOP = '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19.5h20"/>';
+const CLOCK = '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>';
+const SCAN = '<path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3"/><path d="M8 9h8M8 12.5h8M8 16h5"/>';
+const TITLE_ICONS = {
+  "研究室": '<path d="M9 3h6M10 3v6.2L4.6 18.6A1.6 1.6 0 0 0 6 21h12a1.6 1.6 0 0 0 1.4-2.4L14 9.2V3"/><path d="M7 15h10"/>',
+  "PC作業時間": LAPTOP,
+  "日報": '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v18M12.5 8h3.5M12.5 12h3.5"/>',
+  "タイムライン": '<path d="M4 6h9M4 12h16M4 18h6"/>',
+  "分類別の時間": '<path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5a9 9 0 0 1 5.5 5.5H15z"/>',
+  "入退室の記録": '<path d="M3 21h18M6 21V4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21"/><path d="M14.5 12.5v.01"/>',
+  "アプリ・ウィンドウ": '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M6.5 6.5v.01M9.5 6.5v.01"/>',
+  "編集したファイル": '<path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5M9 17l.6-2.4 4.4-4.4 1.8 1.8-4.4 4.4z"/>',
+  "Git": '<circle cx="6" cy="5.5" r="2"/><circle cx="6" cy="18.5" r="2"/><circle cx="18" cy="7.5" r="2"/><path d="M6 7.5v9M18 9.5c0 4.5-7 4-11 7.5"/>',
+  "開いたファイル": `<path d="${FOLDER}"/>`,
+  "画面から読み取った文字": SCAN,
+  "閲覧したページ": '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.3 3 14.7 0 18M12 3c-3 3.3-3 14.7 0 18"/>',
+  "カレンダー": CALENDAR,
+  "研究室にいた日数": `${CALENDAR}<path d="M9 15.5l2 2 4-4"/>`,
+  "滞在時間の合計": '<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9"/>',
+  "1日あたりの滞在": CLOCK,
+  "PC作業時間の合計": LAPTOP,
+  "Wi-Fi の登録": '<path d="M2 8.8a15 15 0 0 1 20 0M5 12.4a10 10 0 0 1 14 0M8.5 15.9a5 5 0 0 1 7 0"/><path d="M12 19.5v.01"/>',
+  "判定のしかた": '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  "記録しないアプリ": '<path d="M3 3l18 18"/><path d="M10.6 5.1A9.8 9.8 0 0 1 12 5c5 0 8.7 4.2 9.7 7a12 12 0 0 1-2.3 3.4M6.6 6.6C4.4 8 2.9 10.2 2.3 12c1 2.8 4.7 7 9.7 7a9.5 9.5 0 0 0 4.4-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
+  "iPhone・iPad で見る": '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  "ローカルAI（日報の要約）": '<path d="M12 3l1.8 4.7 4.7 1.8-4.7 1.8L12 16l-1.8-4.7-4.7-1.8 4.7-1.8z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7L19 20l-.7-1.8-1.8-.7 1.8-.7z"/>',
+  "コミットの通知": '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
+  "データの保存場所": '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.5"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/>',
+  "分類のルール": '<path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9z"/><path d="M7.5 7.5v.01"/>',
+  "監視するフォルダ": '<path d="M10 19H4.5A1.5 1.5 0 0 1 3 17.5v-11A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5V11"/><circle cx="16.5" cy="16" r="3"/><path d="M18.7 18.2L21 20.5"/>',
+  "ウィンドウ名から分からない作業": '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+};
+// 画面が描き変わるたびに、まだアイコンのないタイルとカードのタイトルへ付ける
+function addTitleIcons() {
+  for (const h of $$(".card-head h2:not(.has-icon), .tile .label:not(.has-icon)", view)) {
+    const icon = TITLE_ICONS[h.textContent.trim()];
+    if (!icon) continue;
+    h.classList.add("has-icon");
+    h.insertAdjacentHTML("afterbegin", `<svg class="title-icon" viewBox="0 0 24 24" aria-hidden="true">${icon}</svg>`);
+  }
+}
+new MutationObserver(addTitleIcons).observe(view, { childList: true, subtree: true });
 
 // 研究室の滞在（日別のタイルの左側・スマホでは上側）
 function stayHTML(day) {
