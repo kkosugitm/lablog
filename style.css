@@ -219,10 +219,7 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .main-area #report-card .card-head h2 { font-size: 17px; }
 .main-area #report-card .md { font-size: 15px; }
 @media (max-width: 760px) { .main-area .tile .value { font-size: 25px; } }
-.detail-head { display: flex; align-items: center; gap: 10px; margin: 44px 0 12px; flex-wrap: wrap; }
-.detail-head h2 { font-size: 13px; font-weight: 700; color: var(--ink-2); letter-spacing: .12em; }
-.detail-head .sub { font-size: 12px; color: var(--muted); }
-.detail-head .rule { flex: 1; min-width: 40px; border-top: 1px solid var(--axis); }
+.section-break { border: 0; border-top: 1px solid var(--axis); margin: 36px 0 28px; }
 .detail .card { box-shadow: none; }
 .detail .card-head h2 { font-size: 14px; color: var(--ink-2); }
 

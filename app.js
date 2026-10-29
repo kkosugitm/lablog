@@ -308,9 +308,8 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       <section class="card" id="report-card"></section>
     </div>
 
-    <!-- 詳細：時間の内訳と、記録の中身 -->
-    <div class="detail-head"><h2>詳細</h2><span class="sub">${cloud ? "タイムライン・分類別の時間・大学での滞在"
-      : "タイムライン・分類別の時間・大学での滞在・アプリやファイルなどの記録"}</span><span class="rule"></span></div>
+    <!-- 詳細：時間の内訳と、記録の中身（見出しは付けず、間隔と区切り線で分ける） -->
+    <hr class="section-break">
     <div class="grid detail">
       <section class="card span-2">
         <div class="card-head"><h2>タイムライン</h2><span class="sub">ブロックに${touch ? "触れる" : "マウスを重ねる"}と内容が出ます</span></div>
