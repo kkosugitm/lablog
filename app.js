@@ -289,6 +289,8 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       ${levelHTML(day)}
     </div>
 
+    <!-- よく見る部分（メイン）：入退室・時間のタイルと日報 -->
+    <div class="main-area">
     <div class="tiles">
       <div class="tile"><div class="label">入室</div>
         <div class="value num">${firstIn ? fmtHM(firstIn) : "—"}</div>
@@ -303,9 +305,13 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
         <div class="value">${esc(fmtDur(day.work_total))}</div>
         <div class="foot">${esc(locText)}</div></div>
     </div>
+      <section class="card" id="report-card"></section>
+    </div>
 
-    <div class="grid">
-      <section class="card span-2" id="report-card"></section>
+    <!-- 詳細：時間の内訳と、記録の中身 -->
+    <div class="detail-head"><h2>詳細</h2><span class="sub">${cloud ? "タイムライン・分類別の時間・大学での滞在"
+      : "タイムライン・分類別の時間・大学での滞在・アプリやファイルなどの記録"}</span><span class="rule"></span></div>
+    <div class="grid detail">
       <section class="card span-2">
         <div class="card-head"><h2>タイムライン</h2><span class="sub">ブロックに${touch ? "触れる" : "マウスを重ねる"}と内容が出ます</span></div>
         ${timelineHTML(day, names)}
