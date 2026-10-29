@@ -566,7 +566,9 @@ function stayHTML(day) {
   }
   const first = stays[0].start, last = stays[stays.length - 1];
   const end = Math.max(...stays.map((s) => s.end));
-  const pos = (t) => ((t - first) / Math.max(1, end - first)) * 100;
+  // 在室中は、入室から「いま」までをバーの左半分に描き、右半分（まだ来ていない時間）は空けておく
+  const span = last.state === "in" ? 50 : 100;
+  const pos = (t) => ((t - first) / Math.max(1, end - first)) * span;
   const segs = stays.map((s) => {
     const left = pos(s.start), width = Math.max(1, pos(s.end) - left);
     const what = s.state === "in" ? "在室中" : s.state === "tentative" ? "仮退出中" : "研究室";
