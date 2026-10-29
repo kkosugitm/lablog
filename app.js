@@ -142,7 +142,7 @@ function levelHTML(day) {
   const sec = effortSec(day.work_total, day.stay_total);
   const level = forcedLevel != null ? Number(forcedLevel) : levelOf(sec);
   const next = LEVEL_HOURS[level];
-  const tipHtml = `<b>この日のフロー ${level} / 4</b><div>PC作業 ${fmtDur(day.work_total)}・滞在 ${fmtDur(day.stay_total)}</div>`
+  const tipHtml = `<b>この日のフロー ${level} / 4</b>`
     + `<div class="muted">${next ? `あと ${fmtDur(next * HOUR - sec)} でフローが深まります` : "いちばん深いフローです"}</div>`;
   return `<span class="level" ${tipAttr(tipHtml)} role="img" aria-label="この日のフロー ${level} / 4"><span class="level-name">フロー</span>${
     [0, 1, 2, 3].map((i) => `<i class="${i < level ? "on" : ""}"></i>`).join("")}</span>`;
