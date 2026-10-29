@@ -42,6 +42,13 @@ function fmtDur(sec) {
   if (h) return `${h}時間`;
   return `${r}分`;
 }
+// 数字はそのままの大きさで、単位（年・月・日・時間・分・曜日など）だけ小さくする（style.css の .u）
+const numUnits = (text) => esc(text).replace(/[^\d:.\s]+/g, (u) => `<span class="u">${u}</span>`);
+// 日付の見出し：年は小さく添え、スマホ幅では月日の上の段に置く
+function dateHTML(label) {
+  const [, year = "", rest = label] = /^(\d+年)?(.*)$/.exec(label);
+  return `<span class="date-text">${year ? `<span class="year">${numUnits(year)}</span>` : ""}<span class="md">${numUnits(rest)}</span></span>`;
+}
 function fmtClock(sec) {
   const m = Math.round((sec || 0) / 60);
   return `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
@@ -431,7 +438,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
     <div class="page-head">
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, -1)}" aria-label="前の日">‹</a>
       <label class="date-pick" title="日付を選ぶ">
-        <h1>${esc(day.date_label).replace(/^(\d+年)/, '<span class="year">$1</span>')}<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></h1>
+        <h1>${dateHTML(day.date_label)}<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></h1>
         <input type="date" id="pick-date" value="${esc(day.date)}" aria-label="日付を選ぶ">
       </label>
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
@@ -444,7 +451,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
       ${levelHTML(day)}
       <div class="day-stay">${stayHTML(day)}</div>
       <div class="day-work"><div class="label">PC作業時間</div>
-        <div class="value">${esc(fmtDur(day.work_total))}</div>
+        <div class="value">${numUnits(fmtDur(day.work_total))}</div>
         <div class="foot">${esc(locText)}</div></div>
     </div>
       <section class="card" id="report-card"></section>
@@ -545,7 +552,7 @@ function stayHTML(day) {
       ${tipAttr(`<b>${what}</b><div>${fmtHMDay(s.start, t0)}〜${s.state === "in" ? "いま" : fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
   }).join("");
   // 在室中はまだ OUT していないので薄く、仮退出は「OUT（仮）」
-  const exit = last.state === "in" ? { t: "在室中", cls: "pending", cap: "OUT" }
+  const exit = last.state === "in" ? { t: "—", cls: "pending", cap: "OUT" }
     : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cls: "tentative", cap: "OUT（仮）" }
     : { t: fmtHMDay(last.end, t0), cls: "out", cap: "OUT" };
   const foot = last.state === "tentative" ? "仮退出から4時間以内に研究室の Wi-Fi に戻れば、滞在が続きます"
@@ -553,11 +560,11 @@ function stayHTML(day) {
   return `<div class="label">研究室</div>
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
-      <span class="total">${esc(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
+      <span class="total">${numUnits(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
       <span class="cap right io ${exit.cls}" title="退室">${ICON_OUT}${esc(exit.cap)}</span>
       <span class="t num">${fmtHMDay(first, t0)}</span>
-      <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i></span>
-      <span class="t num right ${last.state === "in" ? "now" : ""}">${esc(exit.t)}</span>
+      <span class="track ${esc(last.state)}">${segs}<i class="dot start"></i><i class="dot end"></i>${last.state === "in" ? `<span class="now-badge">在室中</span>` : ""}</span>
+      <span class="t num right ${last.state === "in" ? "pending" : ""}">${esc(exit.t)}</span>
     </div>
     ${foot ? `<div class="foot">${foot}</div>` : ""}`;
 }
@@ -941,10 +948,10 @@ async function renderMonth(monthArg) {
         : `<a class="btn" href="/api/export/stays.csv?month=${esc(month)}">CSV で書き出す</a>`}
     </div>
     <div class="tiles">
-      <div class="tile"><div class="label">研究室にいた日数</div><div class="value">${m.stay_days}<small>日</small></div></div>
-      <div class="tile"><div class="label">滞在時間の合計</div><div class="value">${esc(fmtDur(m.stay_total))}</div></div>
-      <div class="tile"><div class="label">1日あたりの滞在</div><div class="value">${m.stay_days ? esc(fmtDur(avg)) : "—"}</div></div>
-      <div class="tile"><div class="label">PC作業時間の合計</div><div class="value">${esc(fmtDur(m.work_total))}</div></div>
+      <div class="tile"><div class="label">研究室にいた日数</div><div class="value">${numUnits(`${m.stay_days}日`)}</div></div>
+      <div class="tile"><div class="label">滞在時間の合計</div><div class="value">${numUnits(fmtDur(m.stay_total))}</div></div>
+      <div class="tile"><div class="label">1日あたりの滞在</div><div class="value">${m.stay_days ? numUnits(fmtDur(avg)) : "—"}</div></div>
+      <div class="tile"><div class="label">PC作業時間の合計</div><div class="value">${numUnits(fmtDur(m.work_total))}</div></div>
     </div>
     <section class="card">
       <div class="card-head"><h2>カレンダー</h2></div>

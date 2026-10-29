@@ -262,13 +262,17 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .signin { max-width: 460px; margin: 40px auto; display: grid; gap: 14px; justify-items: center; text-align: center; }
 .signin .notice { text-align: left; }
 .page-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.page-head h1 { font-size: calc(28px * var(--fs)); margin-right: 4px; }
-/* 日付の年は小さく添える（月日を大きく見せるため） */
-.page-head h1 .year { font-size: .58em; font-weight: 700; color: var(--ink-2); }
-/* スマホ幅：「‹ 日付 ›」が 1 行に収まるよう、日付は少し小さく、すき間と矢印の余白は詰める */
+.page-head h1 { font-size: calc(32px * var(--fs)); line-height: 1.15; margin-right: 4px; }
+/* 日付：数字は大きく、年・月・日・曜日の文字は小さく（app.js の dateHTML）。年は小さく添える */
+.page-head h1 .year { font-size: .6em; color: var(--ink-2); margin-right: .3em; }
+.page-head h1 .year .u { font-size: .8em; }
+.page-head h1 .md .u { font-size: .55em; margin: 0 .04em; }
+/* スマホ幅：年を月日の上の段に置き、月日をもっと大きくする。すき間と矢印の余白は詰める */
 @media (max-width: 700px) {
   .page-head { gap: 6px; }
-  .page-head h1 { font-size: calc(25px * var(--fs)); }
+  .page-head h1 { font-size: calc(34px * var(--fs)); }
+  .page-head h1 .date-text { display: inline-block; }
+  .page-head h1 .year { display: block; font-size: .46em; line-height: 1.2; margin: 0 0 1px; }
   .page-head > .btn { padding-left: 10px; padding-right: 10px; }
 }
 /* 日付の見出し：押すとカレンダーが開く（透明な日付の入力欄を重ねている） */
@@ -305,7 +309,9 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
 @media (max-width: 760px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.tile .value { font-size: calc(26px * var(--fs)); font-weight: 700; line-height: 1.25; margin-top: 4px; }
+.tile .value { font-size: calc(30px * var(--fs)); font-weight: 700; line-height: 1.25; margin-top: 4px; }
+/* 時間・日数：数字は大きく、時間・分・日の文字は小さく（app.js の numUnits） */
+:is(.tile .value, .stay-span .total) .u { font-size: .5em; margin: 0 .14em 0 .06em; }
 .tile .value small { font-size: calc(14px * var(--fs)); font-weight: 600; color: var(--ink-2); margin-left: 2px; }
 .tile .foot { font-size: calc(12px * var(--fs)); color: var(--muted); margin-top: 4px; }
 
@@ -327,10 +333,10 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
   .main-area .tile.day-tile { grid-template-columns: minmax(0, 1fr); }
   .day-tile .day-work { border-left: 0; margin: 14px 0 0; padding: 14px 0 0; border-top: 1px solid var(--border); }
 }
-.main-area .tile .value { font-size: calc(30px * var(--fs)); }
+.main-area .tile .value { font-size: calc(36px * var(--fs)); }
 .main-area #report-card { padding: 16px 18px; box-shadow: var(--lift); }
 .main-area #report-card .md { font-size: calc(15px * var(--fs)); }
-@media (max-width: 760px) { .main-area .tile .value { font-size: calc(25px * var(--fs)); } }
+@media (max-width: 760px) { .main-area .tile .value { font-size: calc(32px * var(--fs)); } }
 .section-break { border: 0; border-top: 1px solid var(--axis); margin: 36px 0 28px; }
 
 /* 研究室の滞在：「入室 ●━━ 滞在時間 ━━● 退室」。塗った区間が研究室にいた時間、点線は研究室の外 */
@@ -346,10 +352,16 @@ main.wrap { padding-top: 18px; padding-bottom: 48px; }
 .stay-span .io.out { color: var(--critical-text); }
 .stay-span .io.tentative { color: var(--warning-text); }
 .stay-span .io.pending { color: var(--muted); opacity: .7; }
-.stay-span .total { text-align: center; font-size: calc(22px * var(--fs)); font-weight: 700; line-height: 1.2; align-self: end; }
+.stay-span .total { text-align: center; font-size: calc(30px * var(--fs)); font-weight: 700; line-height: 1.2; align-self: end; }
 .stay-span .total small { display: block; font-size: calc(11.5px * var(--fs)); font-weight: 600; color: var(--ink-2); }
 .stay-span .t { font-size: calc(28px * var(--fs)); font-weight: 700; line-height: 1.2; white-space: nowrap; }
-.stay-span .t.now { font-size: calc(18px * var(--fs)); color: var(--good-text); }
+.stay-span .t.pending { color: var(--muted); opacity: .6; }
+/* 在室中は、右端の時刻の欄ではなくバーの真ん中に載せる */
+.stay-span .now-badge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 1;
+  padding: 2px 12px; border-radius: 999px; white-space: nowrap; pointer-events: none;
+  font-size: calc(14px * var(--fs)); font-weight: 700; line-height: 1.5; color: var(--good-text);
+  background: color-mix(in srgb, var(--good) 20%, var(--surface-main));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--good) 45%, transparent); }
 .stay-span .track { position: relative; height: 12px; margin: 0 6px;
                     background: linear-gradient(90deg, var(--axis) 55%, transparent 0) 0 50% / 8px 2px repeat-x; }
 .stay-span .seg { position: absolute; top: 2px; bottom: 2px; min-width: 3px; border-radius: 4px; background: var(--stay); }
