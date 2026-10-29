@@ -431,7 +431,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
     <div class="page-head">
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, -1)}" aria-label="前の日">‹</a>
       <label class="date-pick" title="日付を選ぶ">
-        <h1>${esc(day.date_label)}<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></h1>
+        <h1>${esc(day.date_label).replace(/^(\d+年)/, '<span class="year">$1</span>')}<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></h1>
         <input type="date" id="pick-date" value="${esc(day.date)}" aria-label="日付を選ぶ">
       </label>
       <a class="btn btn-ghost" href="#/day/${addDays(day.date, 1)}" aria-label="次の日">›</a>
