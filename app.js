@@ -269,30 +269,112 @@ $("#pause").addEventListener("click", async () => {
 });
 
 // ページの一番上では背景に溶け込ませ、少しでも下がったら角丸で浮かせる。下へ送っているあいだは小さく
-// （ロゴ・在室の表示・日/月だけ）、上へ戻し始めたら元の大きさに戻す（style.css の at-top・compact）
-const bar = $(".topbar");
-let lastY = 0;
+// （ロゴ・在室の表示・日/月だけ）、上へ戻し始めたら元の大きさに戻す（style.css の at-top・compact）。
+// 大きさが変わるときは、バーの高さを伸び縮みさせ、残る部品は新しい位置まで滑らせる。
+// 消える部品は先に薄くしてから縮め、現れる部品は少し遅れて浮かび上がらせる
+const bar = $(".topbar"), barInner = $(".topbar-inner");
+const BAR_MOTION = { duration: 380, easing: "cubic-bezier(.22, 1, .36, 1)" };
+const calm = matchMedia("(prefers-reduced-motion: reduce)");
+let lastY = 0, fading = null;
+
+const barParts = () => [...bar.querySelectorAll(".brand, .tabs, .tools, #status > *")];
+
+// 変える前の位置と大きさを測っておき、変えたあと、元の場所に見せかけた状態から新しい場所へ動かす
+function morphBar(change) {
+  if (calm.matches) return change();
+  const before = new Map(barParts().map((el) => [el, el.getBoundingClientRect()]));
+  const h0 = bar.getBoundingClientRect().height;
+  [bar, ...before.keys()].forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
+  change();
+  const h1 = bar.getBoundingClientRect().height;
+  if (Math.abs(h1 - h0) > 0.5) bar.animate({ height: [`${h0}px`, `${h1}px`] }, BAR_MOTION);
+  for (const el of barParts()) {
+    const a = before.get(el), b = el.getBoundingClientRect();
+    if (!b.width) continue;
+    if (!a || !a.width) { // 現れた部品
+      el.animate({ opacity: [0, 1], transform: ["translateY(-6px)", "none"] }, { ...BAR_MOTION, delay: 100, fill: "backwards" });
+      continue;
+    }
+    const dx = a.left - b.left, dy = a.top - b.top, s = a.height / b.height;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && Math.abs(s - 1) < 0.01) continue;
+    el.animate({ transform: [`translate(${dx}px, ${dy}px) scale(${s})`, "none"] }, BAR_MOTION);
+  }
+}
+
+function setCompact(on) {
+  if (on && fading) return; // 小さくしている途中
+  if (bar.classList.contains("compact") === on && !fading) return;
+  clearTimeout(fading);
+  fading = null;
+  if (!on || calm.matches) return morphBar(() => bar.classList.toggle("compact", on));
+  const going = [...bar.querySelectorAll(".tools, #status .net, #status .pill.paused")];
+  going.forEach((el) => el.animate({ opacity: [1, 0], transform: ["none", "translateY(-4px)"] },
+                                   { duration: 150, easing: "ease-out", fill: "forwards" }));
+  fading = setTimeout(() => {
+    fading = null;
+    morphBar(() => bar.classList.add("compact"));
+  }, 150);
+}
+
 function onScroll() {
   const max = Math.max(0, document.documentElement.scrollHeight - innerHeight);
   const y = Math.min(Math.max(scrollY, 0), max); // iPhone の引っぱり（ばね）で行き過ぎた分は数えない
-  if (y < 1) {
-    bar.classList.add("at-top");
-    bar.classList.remove("compact");
-    lastY = 0;
-    return;
-  }
-  bar.classList.remove("at-top");
-  if (y - lastY > 8) { bar.classList.add("compact"); lastY = y; }        // 下へ
-  else if (lastY - y > 8) { bar.classList.remove("compact"); lastY = y; } // 上へ
+  bar.classList.toggle("at-top", y < 1);
+  if (y < 1) { setCompact(false); lastY = 0; return; }
+  if (y - lastY > 8) { setCompact(true); lastY = y; }       // 下へ
+  else if (lastY - y > 8) { setCompact(false); lastY = y; } // 上へ
 }
 addEventListener("scroll", onScroll, { passive: true });
-// バーは画面に固定してあるので、大きいときのバーの分だけ本文の上に余白をとる（小さくなっても本文は動かさない）
+
+// バーは画面に固定してあるので、大きいときのバーの分だけ本文の上に余白をとる（小さくなっても本文は動かさない）。
+// バー自体の高さは動かしている途中の値になるので、中身（topbar-inner）の下の端から求める
 function fitHeadSpace() {
-  if (bar.classList.contains("compact")) return;
-  document.body.style.setProperty("--head-space", `${Math.ceil(bar.getBoundingClientRect().bottom)}px`);
+  if (bar.classList.contains("compact") || fading) return;
+  document.body.style.setProperty("--head-space", `${Math.ceil(barInner.getBoundingClientRect().bottom + 1)}px`);
 }
-new ResizeObserver(fitHeadSpace).observe(bar);
+new ResizeObserver(fitHeadSpace).observe(barInner);
 addEventListener("resize", fitHeadSpace);
+
+// ------------------------------------------------------------ スクロールのつまみ（PC）
+// ページのスクロールバーは普段は隠しておき（style.css）、スクロールしたときだけ右端に細いつまみを薄く出す。
+// 出ている間はつまんで動かせる。iPhone・iPad はもともと同じ動きなので何もしない
+if (matchMedia("(hover: hover) and (pointer: fine)").matches) {
+  const thumb = document.createElement("div");
+  thumb.className = "scroll-thumb";
+  thumb.setAttribute("aria-hidden", "true");
+  document.body.append(thumb);
+  let hideTimer = null, drag = null;
+  const place = () => {
+    const total = document.documentElement.scrollHeight, view = innerHeight;
+    if (total <= view + 1) return false;
+    const h = Math.max(36, (view * view) / total);
+    thumb.style.height = `${h}px`;
+    thumb.style.transform = `translateY(${(view - h) * (scrollY / (total - view))}px)`;
+    return true;
+  };
+  const show = () => {
+    if (!place()) return;
+    thumb.classList.add("show");
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { if (!drag && !thumb.matches(":hover")) thumb.classList.remove("show"); }, 900);
+  };
+  addEventListener("scroll", show, { passive: true });
+  thumb.addEventListener("pointerleave", () => { if (!drag) show(); });
+  thumb.addEventListener("pointerdown", (e) => {
+    drag = { y: e.clientY, top: scrollY };
+    thumb.setPointerCapture(e.pointerId);
+    thumb.classList.add("drag");
+    e.preventDefault();
+  });
+  thumb.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    const range = document.documentElement.scrollHeight - innerHeight;
+    scrollTo(0, drag.top + ((e.clientY - drag.y) * range) / (innerHeight - thumb.offsetHeight));
+  });
+  const endDrag = () => { drag = null; thumb.classList.remove("drag"); show(); };
+  thumb.addEventListener("pointerup", endDrag);
+  thumb.addEventListener("pointercancel", endDrag);
+}
 
 // ------------------------------------------------------------ 画面の切り替え
 
@@ -989,7 +1071,8 @@ async function renderSettings() {
           <p class="help">ウィンドウ名が「Claude」だけのときに、そのとき使っていた会話の題名で補います。会話の中身は記録しません。</p>
           <label class="check"><input type="checkbox" name="ocr" ${s.screen_text.enabled ? "checked" : ""}> 下のアプリが前面にあるとき、画面の文字を読み取って日報の材料にする</label>
           <label class="field" style="margin-top:8px"><span>対象のアプリ（実行ファイル名を 1 行に 1 つ）</span>
-            <textarea name="apps" rows="3">${esc(s.screen_text.apps.join("\n"))}</textarea></label>
+            <textarea name="apps" rows="6">${esc(s.screen_text.apps.join("\n"))}</textarea></label>
+          <p class="help">ウィンドウ名から作業内容が分からないアプリだけを入れます。ブラウザ（閲覧履歴を使う）、Word・Excel・PowerPoint・VS Code・Notion（ウィンドウ名に文書やページの名前が出る）、エクスプローラー、Git（コミットを記録する）は入れなくて大丈夫です。</p>
           <div class="row">
             <label class="field"><span>読み取る間隔（分）</span><input type="number" name="interval" min="1" max="60" step="1" value="${s.screen_text.interval_min}" style="width:7em"></label>
             <label class="field"><span>読み取った文字を残す日数</span><input type="number" name="keep" min="1" max="30" step="1" value="${s.screen_text.keep_days}" style="width:7em"></label>

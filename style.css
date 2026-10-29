@@ -116,8 +116,13 @@ body { padding-top: var(--head-space, 64px); }
   backdrop-filter: blur(20px) saturate(1.8);
   border: 1px solid var(--header-line);
   box-shadow: var(--header-shadow);
-  transition: background-color .25s ease, border-color .25s ease, box-shadow .25s ease;
+  overflow: hidden; /* 高さを伸び縮みさせている途中に、中身がはみ出さないようにする */
+  transition: background-color .4s cubic-bezier(.22, 1, .36, 1), border-color .4s cubic-bezier(.22, 1, .36, 1),
+              box-shadow .4s cubic-bezier(.22, 1, .36, 1);
 }
+/* 大きさが変わるとき、部品は左上を基準に動かす（app.js の morphBar） */
+.topbar :is(.brand, .tabs, .tools, #status > *) { transform-origin: left top; }
+@media (prefers-reduced-motion: reduce) { .topbar { transition: none; } }
 .topbar.at-top { background-color: transparent; border-color: transparent; box-shadow: none;
                  -webkit-backdrop-filter: none; backdrop-filter: none; }
 .topbar-inner {
@@ -222,6 +227,19 @@ label.check { display: inline-flex; align-items: center; gap: 6px; cursor: point
 .notice .ico { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
                font-size: calc(12px * var(--fs)); font-weight: 800; color: #0b0b0b; background: var(--warning); }
 .notice.error .ico { background: var(--critical); color: #fff; }
+
+/* ---- ページのスクロールバー ----
+   PC では普段は隠し、スクロールしている間だけ右端に細いつまみを薄く出す（app.js の「スクロールのつまみ」）。
+   iPhone・iPad はもともとそう動くので、そのままにする */
+@media (hover: hover) and (pointer: fine) {
+  html { scrollbar-width: none; }
+  html::-webkit-scrollbar { display: none; }
+}
+.scroll-thumb { position: fixed; top: 0; right: 3px; z-index: 30; width: 6px; border-radius: 3px;
+                background: color-mix(in srgb, var(--ink) 32%, transparent);
+                opacity: 0; pointer-events: none; transition: opacity .5s ease, width .15s ease, background-color .15s ease; }
+.scroll-thumb.show { opacity: 1; pointer-events: auto; transition-duration: .15s; }
+.scroll-thumb:hover, .scroll-thumb.drag { width: 9px; background: color-mix(in srgb, var(--ink) 50%, transparent); }
 
 /* ---- レイアウト ---- */
 main.wrap { padding-top: 18px; padding-bottom: 48px; }
