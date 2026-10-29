@@ -306,7 +306,7 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
         ${categoryBarsHTML(day, names)}
       </section>
       <section class="card">
-        <div class="card-head"><h2>大学での滞在</h2><span class="spacer"></span>
+        <div class="card-head"><h2>研究室</h2><span class="spacer"></span>
           <button class="btn btn-sm" id="add-stay">＋ 追加</button></div>
         <div id="stays">${staysHTML(day)}</div>
       </section>
@@ -366,7 +366,7 @@ const ICON_OUT = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2
 function stayTileHTML(day) {
   const stays = day.stays, t0 = day.range[0];
   if (!stays.length) {
-    return `<div class="tile stay-tile"><div class="label">大学での滞在</div>
+    return `<div class="tile stay-tile"><div class="label">研究室</div>
       <div class="stay-span empty">
         <span class="cap io">${ICON_IN}IN</span><span class="total muted">大学には来ていません</span><span class="cap right io">${ICON_OUT}OUT</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
@@ -389,7 +389,7 @@ function stayTileHTML(day) {
   const foot = last.state === "tentative" ? "仮退出から4時間以内に大学の Wi-Fi に戻れば、滞在が続きます"
     : stays.length > 1 ? `出入り ${stays.length} 回。点線のあいだ（大学の外）は滞在時間に含めません`
     : "大学の Wi-Fi に接続してから切れるまで（PC を閉じていた時間も含む）";
-  return `<div class="tile stay-tile"><div class="label">大学での滞在</div>
+  return `<div class="tile stay-tile"><div class="label">研究室</div>
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
       <span class="total">${esc(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
