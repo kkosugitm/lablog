@@ -98,7 +98,31 @@ const levelOf = (sec) => LEVEL_HOURS.filter((h) => sec >= h * HOUR).length;
 const preview = new URLSearchParams(location.search);
 const forcedLevel = /^[0-4]$/.test(preview.get("level") || "") ? preview.get("level") : null;
 if (preview.get("theme") === "light") document.documentElement.dataset.theme = "light";
-function setLevel(level) { document.body.dataset.level = forcedLevel ?? String(level); }
+function setLevel(level) {
+  document.body.dataset.level = forcedLevel ?? String(level);
+  paintEdge();
+}
+
+// iPhone・iPad では、ページは時計の下から始まり、時計の部分はホーム画面版では theme-color、Safari ではページの地の色で塗られる。
+// 壁紙は時計の裏まで描けないので、そこを壁紙の上の端に近い色（青と緑の光を地の色に混ぜた色）で塗り、つなぎ目を目立たなくする
+function edgeColor() {
+  const cs = getComputedStyle(document.body);
+  const rgb = (name) => {
+    const m = /^#([0-9a-f]{6})$/i.exec(cs.getPropertyValue(name).trim());
+    return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : null;
+  };
+  const page = rgb("--page") || [10, 10, 10];
+  const a = rgb("--wa") || page, b = rgb("--wb") || page;
+  // 光の濃さ。0.75 は iPhone の画面写真で、壁紙の上の端の色と合わせた値
+  const s = (parseFloat(cs.getPropertyValue("--w-opacity")) || 0) * (parseFloat(cs.getPropertyValue("--w-dim")) || 1) * 0.75;
+  return "#" + page.map((p, i) => Math.round(p + ((a[i] + b[i]) / 2 - p) * s).toString(16).padStart(2, "0")).join("");
+}
+function paintEdge() {
+  const color = edgeColor();
+  document.body.style.setProperty("--edge", color);
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => { m.content = color; });
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paintEdge);
 
 function levelHTML(day) {
   const sec = effortSec(day.work_total, day.stay_total);

@@ -143,8 +143,8 @@ code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-siz
   .topbar .tabs a { padding-left: 10px; padding-right: 10px; }
   .topbar #pause { padding-left: 10px; padding-right: 10px; }
 }
-/* iPhone・iPad（iOS 26）：ページは時計の裏まで描かれ（viewport-fit=cover）、時計のすぐ下には「ぼかし」がかかる。
-   時計の裏はアプリのまま見せ、浮いたヘッダーはぼかしの範囲より下（時計の下 18px）に置いて縁をくっきりさせる */
+/* iPhone・iPad（iOS 26）：ページは時計の下から始まり、時計のすぐ下には「ぼかし」がかかる。
+   浮いたヘッダーはぼかしの範囲より下（ページの上の端から 18px）に置いて縁をくっきりさせる */
 @supports (-webkit-touch-callout: none) {
   .topbar { top: calc(env(safe-area-inset-top, 0px) + 18px); margin-top: calc(env(safe-area-inset-top, 0px) + 18px); }
 }
@@ -431,11 +431,14 @@ details.group .inner .list-item { font-size: calc(13px * var(--fs)); padding: 4p
    0 は地味なまま。1 から壁紙の光が出て、カードがすりガラスになり、4 で最も鮮やかに・ゆっくり動く。
    分類の色（タイムライン・横棒）は意味を持つので変えない。変えるのは背景とカード・タイルだけ。 */
 #wallpaper { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-/* iPhone の Safari では、ページの一番下はアドレス欄の裏まで描かれるが、固定した壁紙はその手前までしか届かない。
-   光がそこで途切れて地の色の帯に見えないよう、壁紙を下の端に向かって地の色になじませる */
+/* iPhone・iPad：壁紙は時計の部分にも、Safari のアドレス欄の裏にも届かず、そこはページの地の色（ホーム画面版の時計の部分は theme-color）になる。
+   その色を壁紙の光に近い色（--edge、app.js の paintEdge）にし、壁紙を上下の端でその色になじませて帯に見えないようにする。
+   壁紙の暗い下地は ::before に描き、真ん中の見た目は PC と同じにする（Safari が地の色と取り違えないよう、単色ではなく画像で塗る） */
 @supports (-webkit-touch-callout: none) {
-  #wallpaper { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 240px), transparent);
-               mask-image: linear-gradient(to bottom, #000 calc(100% - 240px), transparent); }
+  body { background-color: var(--edge, var(--page)); }
+  #wallpaper::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(var(--page), var(--page)); }
+  #wallpaper { -webkit-mask-image: linear-gradient(to bottom, transparent, #000 64px, #000 calc(100% - 240px), transparent);
+               mask-image: linear-gradient(to bottom, transparent, #000 64px, #000 calc(100% - 240px), transparent); }
 }
 #wallpaper i {
   position: absolute; width: 90vmax; height: 90vmax; border-radius: 50%;
