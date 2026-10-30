@@ -168,6 +168,10 @@ window.LabLogCloud = (() => {
       if (!res.ok) throw await graphError(res, "から読み込めませんでした");
       return (await res.json()).value.map((x) => x.name);
     },
+    async remove(path) {
+      const res = await graph(`:/${path}`, { method: "DELETE" });
+      if (!res.ok && res.status !== 404) throw await graphError(res, "から消せませんでした");
+    },
   };
 
   const devStore = {
@@ -185,6 +189,9 @@ window.LabLogCloud = (() => {
     async list(dir) {
       const res = await fetch(`${cfg.dev}${dir}/`, { cache: "no-store" });
       return res.ok ? res.json() : [];
+    },
+    async remove(path) {
+      await fetch(cfg.dev + path, { method: "DELETE" });
     },
   };
 
@@ -305,6 +312,12 @@ window.LabLogCloud = (() => {
 
   async function getStatus() {
     const meta = await read("meta.json");
+    // PC で連携を解除すると、PC が記録を消して unlinked.json を置く（cloud.py の unlink）。見つけたらサインアウトする
+    if (!meta && await read("unlinked.json")) {
+      const e = new Error("PC で Microsoft アカウント連携が解除されました。");
+      e.name = "Unlinked";
+      throw e;
+    }
     await checkPending(meta);
     const base = { today: today(), offline: state.offline, pending: pendingEdits().length };
     if (!meta) return { ...base, state: "none" };
@@ -373,10 +386,11 @@ window.LabLogCloud = (() => {
     const tok = load(KEY.token);
     const signedIn = !!(tok && (tok.access || tok.refresh)) || (!!tok && Date.now() - (load(KEY.silent) || 0) > 10 * 60 * 1000);
     if (signedIn && !load(KEY.marker)) {
-      // 初めて使うときは、ここで OneDrive にアプリ専用フォルダを作り、PC が書き出し先を見つけるための目印を置く
+      // 初めて使うとき（連携を解除したあとも）は、ここで OneDrive にアプリ専用フォルダを作り、PC が書き出し先を見つけるための目印を置く
       try {
         await store.ensureRoot();
         await store.write("viewer.json", { ...MARKER, signed_in: Date.now() / 1000 });
+        await store.remove("unlinked.json");
         save(KEY.marker, Date.now());
       } catch (e) {
         if (e.name === "SignInRequired") return { signedIn: false };

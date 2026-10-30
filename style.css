@@ -160,8 +160,9 @@ body { padding-top: var(--head-space, 64px); }
 .pill.tentative .dot { background: var(--warning); }
 .pill.paused { background: color-mix(in srgb, var(--critical) 14%, transparent); color: var(--critical); }
 .pill.paused .dot { background: var(--critical); }
-:is(.pill, .net).stale { opacity: .6; }  /* ビューアー：PC からの更新が途絶えている */
-.status .net { font-size: calc(13px * var(--fs)); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ビューアー：ページの一番上の右に最終更新。PC からの更新が途絶えていれば薄く */
+.page-top:not(:empty) { text-align: right; padding-top: 6px; font-size: calc(12px * var(--fs)); color: var(--muted); }
+.page-top .stale { opacity: .6; }
 @media (max-width: 700px) {
   /* スマホ幅では大きいバーが 2 段になるので、小さいバーは上下の中央ではなく、大きいバーの上の端にそろえる */
   .topbar { top: 8px; align-items: flex-start; }
@@ -191,11 +192,11 @@ body { padding-top: var(--head-space, 64px); }
 .topbar.compact .brand { font-size: calc(17px * var(--fs)); gap: 7px; }
 .topbar.compact .brand img { width: 24px; height: 24px; }
 .topbar.compact .clock { font-size: calc(15px * var(--fs)); }
-.topbar.compact :is(.status .net, .pill) { font-size: calc(12px * var(--fs)); }
+.topbar.compact .pill { font-size: calc(12px * var(--fs)); }
 .topbar.compact .tabs a { padding: 3px 12px; }
 /* スマホ幅：入りきらないので、ロゴ・時刻・日/月だけにする */
 @media (max-width: 700px) {
-  .topbar.compact :is(.tools, .status .net, .status .pill.paused) { display: none; }
+  .topbar.compact :is(.tools, .status .pill.paused) { display: none; }
 }
 /* 大きさが変わるとき、部品は左上を基準に動かす・拡大縮小する（app.js の morphBar） */
 .topbar :is(.brand, .tabs, .tools, #status > *) { transform-origin: left top; }
@@ -487,7 +488,7 @@ textarea.note { width: 100%; background-attachment: local; border: 0; resize: ve
                      stroke-linecap: round; stroke-linejoin: round; }
 .stay-span .cap.io { color: var(--good-text); }
 .stay-span .cap.io.right { color: var(--critical-text); }
-.stay-span .cap.io.right.tentative { color: var(--warning-text); } /* 仮退出は黄 */
+.stay-span .cap.io.right.tentative { color: var(--warning-text); } /* 仮退室は黄 */
 .stay-span .total { text-align: center; font-size: calc(30px * var(--fs)); font-weight: 700; line-height: 1.2; align-self: end; }
 .stay-span .total small { display: block; font-size: calc(11.5px * var(--fs)); font-weight: 600; color: var(--ink-2); }
 .stay-span .t { font-size: var(--t-size); font-weight: 700; line-height: 1.2; white-space: nowrap; }
@@ -529,6 +530,8 @@ textarea.note { width: 100%; background-attachment: local; border: 0; resize: ve
 /* ---- 滞在 ---- */
 .stay-list { display: grid; gap: 6px; }
 .day-stay #stays { margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); }
+.presence-info { font-size: calc(12.5px * var(--fs)); color: var(--ink-2); margin-top: 4px; }
+.presence-info:empty { display: none; }
 .stays-title { font-size: calc(12.5px * var(--fs)); font-weight: 700; color: var(--ink-2); margin: 0 0 6px; }
 .day-stay .stay-add { justify-self: start; margin-top: 4px; }
 .stay-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 0;
@@ -634,8 +637,14 @@ details.group .inner .list-item { font-size: calc(13px * var(--fs)); padding: 4p
 .settings .switch-row:first-child { padding-top: 4px; }
 .grid.settings { align-items: start; }
 .settings code { overflow-wrap: anywhere; }
-.settings [data-modes][hidden] { display: none; }
+.settings :is([data-modes], [data-when])[hidden] { display: none; }
 .judge-wifi { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--border); }
+/* 作業内容の記録：左に記録する項目、右にそれぞれの設定（狭い画面では縦に並べる） */
+.record-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 48px; align-items: start; }
+/* 右側の項目（監視するフォルダ・コミットの通知など）は、あいだを広くとり、見出しを大きく */
+.record-subs { display: flex; flex-direction: column; gap: 40px; padding-top: 14px; }
+.sub-title { font-size: calc(16px * var(--fs)); font-weight: 700; margin: 0 0 10px; }
+.record-sub > .help:first-of-type { margin-top: 0; }
 .list-title { font-size: calc(12.5px * var(--fs)); font-weight: 600; color: var(--ink-2); margin: 14px 0 4px; }
 .field > span { font-size: calc(12.5px * var(--fs)); color: var(--ink-2); font-weight: 600; }
 .cat-edit { display: grid; grid-template-columns: 12em repeat(3, minmax(0, 1fr)) auto; gap: 8px; align-items: start;

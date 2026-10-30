@@ -240,10 +240,9 @@ function setupRecord(el, a) {
 }
 
 function setupMethod(el, a) {
-  const hours = state.settings.settings.leave_after_hours;
   el.innerHTML = `
     <p>研究室への入室/退室時刻の記録方法を選択してください。</p>
-    <div class="choices">${presenceMethods(hours).map(([v, l, d]) => setupChoice("mode", v, l, d)).join("")}</div>
+    <div class="choices">${presenceMethods.map(([v, l, d]) => setupChoice("mode", v, l, d)).join("")}</div>
     ${a.mode === "activity" ? `
       <h3 class="inner-title">自宅などから、この PC にリモートで接続して作業しますか？</h3>
       <div class="choices">${SETUP_REMOTE.map(([v, l, d]) => setupChoice("remote", v, l, d)).join("")}</div>` : ""}
@@ -346,8 +345,10 @@ function setupDone(el, a) {
     <div class="row"><span class="spacer"></span>
       <button class="btn btn-primary" id="setup-finish">${s.setup_done ? "設定を保存" : "記録を始める"}</button></div>`;
   $("#setup-finish").addEventListener("click", async (e) => {
-    e.currentTarget.disabled = true;
+    const btn = e.currentTarget;
+    btn.disabled = true;
     const { settings: cur } = await loadSettings(); // AI の準備でモデルが変わっていることがあるので読み直す
+    if (cur.cloud.enabled && !a.cloud && !confirm(UNLINK_CONFIRM)) { btn.disabled = false; return; }
     const ok = await saveSettings({
       setup_done: true,
       record: { apps: a.apps, files: a.files, git: a.git, recent_files: a.recent },
@@ -359,7 +360,7 @@ function setupDone(el, a) {
                   place: a.mode === "off" ? a.place : cur.presence.place },
       cloud: { ...cur.cloud, enabled: a.cloud },
     }, cur.setup_done ? "設定を保存しました" : "記録を始めました");
-    if (!ok) { e.currentTarget.disabled = false; return; }
+    if (!ok) { btn.disabled = false; return; }
     setupState.a = null;
     setupState.step = 0;
     refreshStatus();

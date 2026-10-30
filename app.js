@@ -209,11 +209,11 @@ const PLACE_LABEL = { "大学": "研究室" };
 const placeName = (key) => PLACE_LABEL[key] || key;
 // 入退室の判定方法（wifi / activity：この PC の操作 / manual：手動 / off：記録しない）。ビューアーでは設定が無いので wifi
 const presenceMode = () => (state.settings && state.settings.settings.presence || {}).mode || "wifi";
-const PRESENCE_LABEL = { activity: "入退室：この PC の操作で判定", manual: "入退室：手動で記録", off: "入退室は記録しません" };
-// 判定方法の説明（設定の画面と初期設定の画面で使う）。h：退出を確定するまでの時間
-const presenceMethods = (h) => [
-  ["wifi", "Wi-Fi で判定", `研究室の Wi-Fi に接続したら入室、それ以外の Wi-Fi に接続したら退室にします。Wi-Fi が切れたら仮退出にし、${h}時間戻らなければ退室を確定します。`],
-  ["activity", "この PC の操作で判定", `この PC を操作し始めたら入室、操作しなくなったら（ロックしたら）仮退出にし、${h}時間戻らなければ退室を確定します。`],
+const PRESENCE_LABEL = { activity: "この PC の操作で判定", manual: "手動で記録", off: "入退室は記録しません" };
+// 判定方法の説明（設定の画面と初期設定の画面で使う）
+const presenceMethods = [
+  ["wifi", "Wi-Fi で判定", "研究室の Wi-Fi に接続したら入室、それ以外の Wi-Fi に接続したら退室にします。Wi-Fi が切れたら仮退室にし、一定時間戻らなければ退室を確定します。"],
+  ["activity", "この PC の操作で判定", "この PC を操作し始めたら入室、操作しなくなったら（ロックしたら）仮退室にし、一定時間戻らなければ退室を確定します。"],
   ["manual", "手動で記録", "「入室」「退室」ボタンを押して記録します。"],
   ["off", "記録しない", "PC作業時間だけを記録します。"],
 ];
@@ -226,19 +226,9 @@ function renderStatus() {
   if (s.paused) {
     parts.push(`<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>`);
   }
-  if (s.remote) parts.push(`<span class="pill"><span class="dot"></span>リモートデスクトップで接続中</span>`);
-  // 在室中かどうかは研究室のタイルに出すので、上部バーには判定に使っているもの（Wi-Fi など）だけを出す
-  // 設定を読めていれば設定のほう（保存した直後から切り替わる。記録の処理から届く s.mode は数秒遅れる）
-  const mode = state.settings ? presenceMode() : (s.mode || "wifi");
-  if (mode === "wifi") {
-    const net = s.ssids && s.ssids.length
-      ? `Wi-Fi：${esc(s.ssids.join(", "))}${NET_LABEL[s.net] ? `（${NET_LABEL[s.net]}）` : ""}`
-      : "Wi-Fi：未接続";
-    parts.push(`<span class="net">${net}</span>`);
-  } else {
-    parts.push(`<span class="net">${PRESENCE_LABEL[mode] || ""}</span>`);
-  }
   $("#status").innerHTML = parts.join("");
+  const info = $("#presence-info");
+  if (info) info.innerHTML = presenceInfoHTML();
   const btn = $("#pause");
   const label = s.paused ? "記録を再開" : "記録を一時停止";
   btn.innerHTML = s.paused ? ICON_PLAY : ICON_STOP;
@@ -248,16 +238,29 @@ function renderStatus() {
   renderNotices();
 }
 
-// ビューアー：PC が最後に書き出した時点の状態を出す
-function renderCloudStatus(s) {
+// 入退室の判定に使っているもの（Wi-Fi など）。入退室状況のタイルに出す
+function presenceInfoHTML() {
+  const s = state.status;
+  if (!s) return "";
+  // 設定を読めていれば設定のほう（保存した直後から切り替わる。記録の処理から届く s.mode は数秒遅れる）
+  const mode = state.settings ? presenceMode() : (s.mode || "wifi");
   const parts = [];
-  if (s.paused) parts.push(`<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>`);
-  if (s.state !== "none") {
-    const stale = s.exported && Date.now() / 1000 - s.exported > 15 * 60;
-    const pc = s.device ? `PC（${esc(s.device)}）の` : "PC の";
-    parts.push(`<span class="net ${stale ? "stale" : ""}">${pc}最終更新：${s.exported ? fmtWhen(s.exported) : "—"}</span>`);
+  if (s.remote) parts.push("リモートデスクトップで接続中");
+  if (mode === "wifi") {
+    parts.push(s.ssids && s.ssids.length
+      ? `Wi-Fi：${esc(s.ssids.join(", "))}${NET_LABEL[s.net] ? `（${NET_LABEL[s.net]}）` : ""}` : "Wi-Fi：未接続");
+  } else {
+    parts.push(PRESENCE_LABEL[mode] || "");
   }
-  $("#status").innerHTML = parts.join("");
+  return parts.join("・");
+}
+
+// ビューアー：PC が最後に書き出した時点の状態を出す（最終更新は、ページの一番上の右に）
+function renderCloudStatus(s) {
+  $("#status").innerHTML = s.paused ? `<span class="pill paused"><span class="dot"></span>記録を一時停止中</span>` : "";
+  const stale = s.exported && Date.now() / 1000 - s.exported > 15 * 60;
+  $("#page-top").innerHTML = s.state === "none" ? ""
+    : `<span class="${stale ? "stale" : ""}">最終更新: ${s.exported ? fmtWhen(s.exported) : "—"}</span>`;
   renderNotices();
 }
 
@@ -307,8 +310,17 @@ async function refreshStatus() {
   try {
     state.status = await api.get("/api/status");
     renderStatus();
-  } catch (e) { /* サーバー再起動中など。次の更新で戻る */ }
+  } catch (e) {
+    // ビューアー：PC で連携を解除した → サインアウトする。ほかはサーバー再起動中など（次の更新で戻る）
+    if (e.name === "Unlinked") {
+      state.unlinked = true;
+      cloud.signOut();
+      renderSignIn(e.message);
+    }
+  }
 }
+
+const UNLINK_CONFIRM = "連携を解除します。OneDrive 上の LabLog の記録を削除し、スマホ版からサインアウトします。よろしいですか？";
 
 $("#pause").addEventListener("click", async () => {
   if (cloud) { // ビューアーでは「更新」ボタン：画面のファイルごと読み直す（ホーム画面アプリには再読み込みがないため）
@@ -516,7 +528,9 @@ async function route() {
 async function renderDay(dateArg, { keepScroll = false } = {}) {
   const today = (state.status && state.status.today) || isoDate(new Date());
   const date = dateArg || today;
+  const hash = location.hash;
   const day = await api.get(`/api/day?date=${encodeURIComponent(date)}`);
+  if (location.hash !== hash) return; // 読み込みを待つあいだに、別の日・別の画面に移った（古い日の内容で上書きしない）
   const scrollY = window.scrollY;
   state.tips = [];
   const names = day.category_names;
@@ -653,17 +667,11 @@ const TITLE_ICONS = {
   "滞在時間の合計": '<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9"/>',
   "1日あたりの滞在": CLOCK,
   "PC作業時間の合計": LAPTOP,
-  "Wi-Fi の登録": '<path d="M2 8.8a15 15 0 0 1 20 0M5 12.4a10 10 0 0 1 14 0M8.5 15.9a5 5 0 0 1 7 0"/><path d="M12 19.5v.01"/>',
   "入退室の判定": '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
-  "記録しないアプリ": '<path d="M3 3l18 18"/><path d="M10.6 5.1A9.8 9.8 0 0 1 12 5c5 0 8.7 4.2 9.7 7a12 12 0 0 1-2.3 3.4M6.6 6.6C4.4 8 2.9 10.2 2.3 12c1 2.8 4.7 7 9.7 7a9.5 9.5 0 0 0 4.4-1.1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>',
   "Microsoft アカウント連携": '<path d="M7 18.5h10.5a4 4 0 0 0 .5-7.97A6 6 0 0 0 6.4 9.1 4.7 4.7 0 0 0 7 18.5z"/>',
   "作業内容の記録": '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V2.8h6V4M9 10h6M9 14h6M9 18h3"/>',
-  "LabLog の更新": '<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8.5M4 4v4.5h4.5M4 13a8 8 0 0 0 14.6 4.5l1.4-2M20 20v-4.5h-4.5"/>',
-  "コミットの通知": '<path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 21h4"/>',
-  "データの保存場所": '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.5"/><path d="M4.5 5.5v13c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5v-13M4.5 12c0 1.4 3.4 2.5 7.5 2.5s7.5-1.1 7.5-2.5"/>',
+  "LabLog について": '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5v.01"/>',
   "分類のルール": '<path d="M3 12V4.5A1.5 1.5 0 0 1 4.5 3H12l9 9-9 9z"/><path d="M7.5 7.5v.01"/>',
-  "監視するフォルダ": '<path d="M10 19H4.5A1.5 1.5 0 0 1 3 17.5v-11A1.5 1.5 0 0 1 4.5 5H9l2 2h8.5A1.5 1.5 0 0 1 21 8.5V11"/><circle cx="16.5" cy="16" r="3"/><path d="M18.7 18.2L21 20.5"/>',
-  "画面の文字": SCAN,
 };
 // 画面が描き変わるたびに、まだアイコンのないタイルとカードのタイトルへ付ける
 function addTitleIcons() {
@@ -676,13 +684,17 @@ function addTitleIcons() {
 }
 new MutationObserver(addTitleIcons).observe(view, { childList: true, subtree: true });
 
+// タイトルと、判定に使っているもの（今日の PC の画面だけ。接続が変わると renderStatus が書き換える）
+const stayHeadHTML = (day) => `<div class="label">入退室状況</div>${!cloud && day.is_today
+  ? `<div class="presence-info" id="presence-info">${presenceInfoHTML()}</div>` : ""}`;
+
 // 入退室状況（日別のタイルの左側・スマホでは上側）
 function stayHTML(day) {
   const stays = day.stays, t0 = day.range[0];
   if (!stays.length) {
-    return `<div class="label">入退室状況</div>
+    return `${stayHeadHTML(day)}
       <div class="stay-span empty">
-        <span class="cap io">${ICON_IN}IN</span><span class="total muted">研究室には来ていません</span><span class="cap right io">OUT${ICON_OUT}</span>
+        <span class="cap io">${ICON_IN}IN</span><span class="total muted">未入室</span><span class="cap right io">OUT${ICON_OUT}</span>
         <span class="t">—</span><span class="track"></span><span class="t right">—</span>
       </div>
       ${presenceActionsHTML(day)}
@@ -695,15 +707,15 @@ function stayHTML(day) {
   const pos = (t) => ((t - first) / Math.max(1, end - first)) * span;
   const segs = stays.map((s) => {
     const left = pos(s.start), width = Math.max(1, pos(s.end) - left);
-    const what = s.state === "in" ? "在室中" : s.state === "tentative" ? "仮退出中" : "研究室";
+    const what = s.state === "in" ? "在室中" : s.state === "tentative" ? "仮退室中" : "研究室";
     return `<span class="seg ${esc(s.state)}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%"
       ${tipAttr(`<b>${what}</b><div>${fmtHMDay(s.start, t0)}〜${s.state === "in" ? "いま" : fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
   }).join("");
-  // 在室中はまだ OUT していないので薄く、仮退出は「OUT（仮）」
+  // 在室中はまだ OUT していないので薄く、仮退室は「OUT（仮）」
   const exit = last.state === "in" ? { t: "—", cls: "pending", cap: "OUT" }
     : last.state === "tentative" ? { t: fmtHMDay(last.end, t0), cls: "tentative", cap: "OUT（仮）" }
     : { t: fmtHMDay(last.end, t0), cls: "out", cap: "OUT" };
-  return `<div class="label">入退室状況</div>
+  return `${stayHeadHTML(day)}
     <div class="stay-span">
       <span class="cap io in" title="入室">${ICON_IN}IN</span>
       <span class="total">${numUnits(fmtDur(day.stay_total))}${stays.length > 1 ? `<small>${stays.length}回の合計</small>` : ""}</span>
@@ -717,7 +729,7 @@ function stayHTML(day) {
 }
 
 // 今日の画面だけに出す、入室・退室の大きなボタン（入室の時刻の下に入室、退室の時刻の下に退室）。
-// 在室中は入室を、研究室にいないときは退室を押せなくする（仮退出中は、戻った・帰ったのどちらも押せる）。
+// 在室中は入室を、研究室にいないときは退室を押せなくする（仮退室中は、戻った・帰ったのどちらも押せる）。
 // 入退室を記録しない設定とビューアーでは出さない
 function presenceActionsHTML(day) {
   const mode = presenceMode();
@@ -747,7 +759,7 @@ function timelineHTML(day, names) {
   }
 
   const stays = day.stays.map((s) => {
-    const label = s.state === "tentative" ? "仮退出中" : "研究室";
+    const label = s.state === "tentative" ? "仮退室中" : "研究室";
     return `<span class="tl-stay ${s.state === "tentative" ? "tentative" : ""}" style="left:${L(Math.max(s.start, vs))};width:${W(Math.max(s.start, vs), Math.min(s.end, ve))}"
       ${tipAttr(`<b>${label}</b><div>${fmtHMDay(s.start, t0)}〜${fmtHMDay(s.end, t0)}（${fmtDur(s.duration)}）</div>`)}></span>`;
   }).join("");
@@ -797,7 +809,7 @@ function staysHTML(day) {
     <div class="stay-row">
       <span class="time">${fmtHMDay(s.start, day.range[0])} 〜 ${s.state === "in" ? "在室中" : fmtHMDay(s.end, day.range[0])}</span>
       <span class="ink2">${fmtDur(s.duration)}</span>
-      ${s.state === "tentative" ? `<span class="tag warn">仮退出中</span>` : ""}
+      ${s.state === "tentative" ? `<span class="tag warn">仮退室中</span>` : ""}
       ${s.pending ? `<span class="tag warn">PC へ反映待ち</span>` : ""}
       <span class="spacer"></span>
       ${s.id == null ? "" : `<button class="btn btn-sm btn-ghost" data-edit-stay="${s.id}">編集</button>`}
@@ -1073,7 +1085,9 @@ function renderReport(day, { editing = false } = {}) {
 async function renderMonth(monthArg) {
   const today = (state.status && state.status.today) || isoDate(new Date());
   const month = monthArg || today.slice(0, 7);
+  const hash = location.hash;
   const m = await api.get(`/api/month?month=${encodeURIComponent(month)}`);
+  if (location.hash !== hash) return;
   const [y, mo] = month.split("-").map(Number);
   const maxStay = Math.max(HOUR, ...m.days.map((d) => d.stay));
   const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // 月曜始まり
@@ -1170,10 +1184,71 @@ async function saveSettings(patch, msg = "保存しました") {
 
 const lines = (text) => text.split(/[\n,、]/).map((s) => s.trim()).filter(Boolean);
 
-// mode：まだ保存していない判定方法（Wi-Fi を登録して描き直すときに、選んだままにする）
-async function renderSettings({ mode } = {}) {
+// Wi-Fi やフォルダを登録して描き直すとき（keep）は、入力しかけの内容をそのまま残す
+const DRAFT_FORMS = ["record-form", "judge-form"];
+function settingsDraft() {
+  return DRAFT_FORMS.map((id) => $(`#${id}`)).filter(Boolean)
+    .map((f) => [f.id, [...f.elements].filter((e) => e.name).map((e) => ({ name: e.name, value: e.value, checked: e.checked }))]);
+}
+function restoreDraft(draft) {
+  for (const [id, items] of draft) {
+    const f = $(`#${id}`);
+    for (const it of items) {
+      for (const e of [...f.elements].filter((x) => x.name === it.name)) {
+        if (e.type === "radio") { if (e.value === it.value) e.checked = it.checked; }
+        else if (e.type === "checkbox") e.checked = it.checked;
+        else e.value = it.value;
+      }
+    }
+  }
+}
+
+// 選んだ判定方法（data-modes）や、オンにした項目（data-when：同じ form のスイッチ、または選択欄が「記録しない」以外）に
+// 関係する設定だけを出す
+function syncSettingsSections() {
+  const judge = $("#judge-form");
+  $$("[data-modes]").forEach((el) => { el.hidden = !el.dataset.modes.split(" ").includes(judge.mode.value); });
+  $$("[data-when]").forEach((el) => {
+    const f = el.closest("form");
+    const on = (name) => { const e = f.elements[name]; return e.type === "checkbox" ? e.checked : e.value !== "off"; };
+    el.hidden = !el.dataset.when.split(" ").some(on);
+  });
+}
+
+// 設定は変えたらすぐ保存する（スイッチ・選択は押したとき、数字や文字は入力欄から離れたとき）。
+// build：form の入力から保存する設定を作る（null なら保存しない）。after：保存できたあとにすること
+function autoSave(form, build, after) {
+  form.addEventListener("submit", (e) => e.preventDefault()); // Enter キーでは送らない
+  form.addEventListener("change", async (e) => {
+    const input = e.target;
+    if (!input.name || "noSave" in input.dataset) return;
+    if (!input.checkValidity()) { input.reportValidity(); return; }
+    const patch = build(form, input);
+    if (patch && await saveSettings(patch) && after) after(input);
+  });
+}
+
+// 日報の AI：入っているモデルから選ぶ（選んでいるモデルが無ければ「未ダウンロード」として残す）
+async function loadOllamaState() {
+  const o = await api.get("/api/ollama").catch(() => ({ running: false, models: [] }));
+  const f = $("#ollama-form"), el = $("#ollama-state");
+  if (!f || !el) return;
+  const cur = state.settings.settings.ollama.model;
+  const have = o.models || [];
+  const label = (name) => {
+    const m = (o.catalog || []).find((x) => x.name === name);
+    return `${name}${m ? `（${m.label}）` : ""}${have.includes(name) ? "" : "（未ダウンロード）"}`;
+  };
+  f.model.innerHTML = [...new Set([...have, cur])]
+    .map((n) => `<option value="${esc(n)}" ${n === cur ? "selected" : ""}>${esc(label(n))}</option>`).join("");
+  el.innerHTML = !o.running ? `<span class="tag warn">Ollama が起動していません</span>`
+    : !o.model_ready ? `<span class="tag warn">モデルがありません</span> 「初期設定をやり直す」からダウンロードできます。`
+    : `<span class="tag">準備完了</span>`;
+}
+
+async function renderSettings({ keep = false } = {}) {
+  const draft = keep ? settingsDraft() : [];
   const { settings: s, data_dir: dataDir, repos, ssids } = await loadSettings();
-  mode = mode || s.presence.mode;
   const current = ssids && ssids[0];
   const where = !current ? "未接続" : s.wifi.univ.includes(current) ? "研究室として登録済み"
     : s.wifi.home.includes(current) ? "自宅として登録済み"
@@ -1186,10 +1261,8 @@ async function renderSettings({ mode } = {}) {
   const catNames = s.categories.map((c) => c.name).concat(["その他"]);
 
   const rec = s.record;
-  const modeOption = ([value, label, desc]) => `<label class="check"><input type="radio" name="mode" value="${value}" ${mode === value ? "checked" : ""}>
+  const modeOption = ([value, label, desc]) => `<label class="check"><input type="radio" name="mode" value="${value}" ${s.presence.mode === value ? "checked" : ""}>
       <span><b>${label}</b><br><span class="help">${esc(desc)}</span></span></label>`;
-  // その判定方法のときだけ出す項目（data-modes に方法を並べる）
-  const forModes = (modes) => `data-modes="${modes}" ${modes.split(" ").includes(mode) ? "" : "hidden"}`;
   const placeOption = (value, label) => `<option value="${value}" ${s.presence.place === value ? "selected" : ""}>${label}</option>`;
   const appsOption = (value, label) => `<option value="${value}" ${rec.apps === value ? "selected" : ""}>${label}</option>`;
 
@@ -1204,45 +1277,30 @@ async function renderSettings({ mode } = {}) {
         <form id="ollama-form">
           ${toggle("auto", "日報を自動で作成する", s.ollama.auto)}
           ${toggle("enabled", "日報の作成に AI を使用する", s.ollama.enabled)}
-          <label class="field"><span>AI のモデル</span><input type="text" name="model" value="${esc(s.ollama.model)}"></label>
-          <p class="help" id="ollama-state"></p>
-          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="submit">保存</button></div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>作業内容の記録</h2></div>
-        <form id="record-form">
-          <label class="field"><span>使ったアプリ</span>
-            <select name="apps">${appsOption("title", "アプリ名とウィンドウ名")}${appsOption("app", "アプリ名だけ")}${appsOption("off", "記録しない")}</select></label>
-          ${toggle("files", "ファイルの編集履歴", rec.files)}
-          ${toggle("git", "Git のコミット", rec.git)}
-          ${toggle("chrome", "Chrome の閲覧履歴", s.browsers.chrome)}
-          ${toggle("edge", "Edge の閲覧履歴", s.browsers.edge)}
-          ${toggle("recent", "Windows の「最近使ったファイル」", rec.recent_files)}
-          ${toggle("claude", "Claude Code の会話の題名", s.claude_code.enabled)}
-          ${toggle("ocr", "画面の文字", s.screen_text.enabled)}
-          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="submit">保存</button></div>
+          <div data-when="enabled">
+            <label class="field"><span>AI のモデル</span>
+              <select name="model"><option value="${esc(s.ollama.model)}">${esc(s.ollama.model)}</option></select></label>
+            <p class="help" id="ollama-state"></p>
+          </div>
         </form>
       </section>
 
       <section class="card">
         <div class="card-head"><h2>入退室の判定</h2></div>
         <form id="judge-form">
-          ${presenceMethods(s.leave_after_hours).map(modeOption).join("")}
+          ${presenceMethods.map(modeOption).join("")}
           <div class="fields">
-            <label class="field" ${forModes("activity")}><span>仮退出までの時間（分）</span>
-              <input type="number" name="away" min="1" max="120" step="1" value="${s.presence.away_min}"></label>
-            <label class="field" ${forModes("wifi activity manual")}><span>退室を確定するまでの時間（時間）</span>
-              <input type="number" name="leave" min="1" max="24" step="0.5" value="${s.leave_after_hours}"></label>
+            <label class="field" data-modes="activity"><span>仮退室までの時間（分）</span>
+              <input type="number" name="away" min="1" max="120" step="1" required value="${s.presence.away_min}"></label>
+            <label class="field" data-modes="wifi activity manual"><span>退室を確定するまでの時間（時間）</span>
+              <input type="number" name="leave" min="1" max="24" step="0.5" required value="${s.leave_after_hours}"></label>
             <label class="field"><span>離席とみなす時間（分）</span>
-              <input type="number" name="idle" min="1" max="60" step="1" value="${s.idle_threshold_min}"></label>
-            <label class="field" ${forModes("off")}><span>作業時間の場所</span>
+              <input type="number" name="idle" min="1" max="60" step="1" required value="${s.idle_threshold_min}"></label>
+            <label class="field" data-modes="off"><span>作業時間の場所</span>
               <select name="place">${placeOption("home", "自宅")}${placeOption("other", "その他")}</select></label>
           </div>
-          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="submit">保存</button></div>
         </form>
-        <div class="judge-wifi" ${forModes("wifi")}>
+        <div class="judge-wifi" data-modes="wifi">
           <h3 class="inner-title">Wi-Fi の登録</h3>
           <p class="help">研究室専用と大学共通（ScienceTokyo など）の両方を登録します。</p>
           <p>接続中：<b>${esc(current || "なし")}</b>（${where}）</p>
@@ -1257,68 +1315,63 @@ async function renderSettings({ mode } = {}) {
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head"><h2>監視するフォルダ</h2></div>
-        <p class="help">フォルダ内のファイルの編集と、Git のコミットを記録します。</p>
-        <div class="set-list">${s.watch_folders.length ? s.watch_folders.map((f) => `
-          <div class="set-item"><span class="main">${esc(f)}</span>
-          <button class="icon-btn" data-folder-remove="${esc(f)}" aria-label="削除">✕</button></div>`).join("") : `<div class="empty">まだありません</div>`}</div>
-        <div class="row"><button class="btn btn-primary" id="folder-pick">フォルダを選んで追加…</button></div>
-        <form class="row" id="folder-form" style="margin-top:8px">
-          <input type="text" name="path" placeholder="または、フォルダのパスを貼り付け" style="flex:1;min-width:200px">
-          <button class="btn" type="submit">追加</button>
-        </form>
-        <h3 class="inner-title">見つかった Git リポジトリ</h3>
-        <div class="set-list">${repos.length ? repos.map((r) => `<div class="set-item"><span class="main">${esc(r)}</span></div>`).join("")
-          : `<div class="empty">まだありません</div>`}</div>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>Microsoft アカウント連携</h2></div>
-        <p class="help">連携すると、入退室履歴をスマホからも確認できます。</p>
-        <form id="cloud-form">
-          ${toggle("enabled", "連携する", s.cloud.enabled)}
-          <p class="help" id="cloud-state"></p>
-          <div class="row"><span class="spacer"></span>
-            <button class="btn" type="button" id="cloud-export">今すぐ同期</button>
-            <button class="btn btn-primary" type="submit">保存</button></div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>画面の文字</h2></div>
-        <form id="insight-form">
-          <label class="field"><span>読み取るアプリ（1 行に 1 つ）</span>
-            <textarea name="apps" rows="5">${esc(s.screen_text.apps.join("\n"))}</textarea></label>
-          <div class="fields">
-            <label class="field"><span>読み取る間隔（分）</span><input type="number" name="interval" min="1" max="60" step="1" value="${s.screen_text.interval_min}"></label>
-            <label class="field"><span>残す日数</span><input type="number" name="keep" min="1" max="30" step="1" value="${s.screen_text.keep_days}"></label>
+      <section class="card span-2">
+        <div class="card-head"><h2>作業内容の記録</h2></div>
+        <form id="record-form">
+          <div class="record-cols">
+            <div>
+              <label class="field"><span>使ったアプリ</span>
+                <select name="apps">${appsOption("title", "アプリ名とウィンドウ名")}${appsOption("app", "アプリ名だけ")}${appsOption("off", "記録しない")}</select></label>
+              ${toggle("files", "ファイルの編集履歴", rec.files)}
+              ${toggle("git", "Git のコミット", rec.git)}
+              ${toggle("chrome", "Chrome の閲覧履歴", s.browsers.chrome)}
+              ${toggle("edge", "Edge の閲覧履歴", s.browsers.edge)}
+              ${toggle("recent", "Windows の「最近使ったファイル」", rec.recent_files)}
+              ${toggle("claude", "Claude Code の会話の題名", s.claude_code.enabled)}
+              ${toggle("ocr", "画面の文字", s.screen_text.enabled)}
+            </div>
+            <div class="record-subs">
+              <div class="record-sub" data-when="files git">
+                <h3 class="sub-title">監視するフォルダ</h3>
+                <p class="help">フォルダ内のファイルの編集と、Git のコミットを記録します。</p>
+                <div class="set-list">${s.watch_folders.length ? s.watch_folders.map((f) => `
+                  <div class="set-item"><span class="main">${esc(f)}</span>
+                  <button class="icon-btn" type="button" data-folder-remove="${esc(f)}" aria-label="削除">✕</button></div>`).join("") : `<div class="empty">まだありません</div>`}</div>
+                <div class="row"><button class="btn" type="button" id="folder-pick">フォルダを選んで追加…</button></div>
+                <div class="row" style="margin-top:8px">
+                  <input type="text" name="folder_path" data-no-save placeholder="または、フォルダのパスを貼り付け" style="flex:1;min-width:200px">
+                  <button class="btn" type="button" id="folder-add">追加</button>
+                </div>
+                <div class="list-title">見つかった Git リポジトリ</div>
+                <div class="set-list">${repos.length ? repos.map((r) => `<div class="set-item"><span class="main">${esc(r)}</span></div>`).join("")
+                  : `<div class="empty">まだありません</div>`}</div>
+              </div>
+              <div class="record-sub" data-when="git">
+                <h3 class="sub-title">コミットの通知</h3>
+                ${toggle("notify", "コミットしていない変更を通知する", s.git_notify.enabled)}
+                <label class="field"><span>通知までの時間（時間）</span>
+                  <input type="number" name="notify_hours" min="0.5" max="24" step="0.5" required value="${s.git_notify.hours}"></label>
+              </div>
+              <div class="record-sub" data-when="ocr">
+                <h3 class="sub-title">画面の文字</h3>
+                <label class="field"><span>読み取るアプリ（1 行に 1 つ）</span>
+                  <textarea name="ocr_apps" rows="5">${esc(s.screen_text.apps.join("\n"))}</textarea></label>
+                <div class="fields">
+                  <label class="field"><span>読み取る間隔（分）</span><input type="number" name="interval" min="1" max="60" step="1" required value="${s.screen_text.interval_min}"></label>
+                  <label class="field"><span>残す日数</span><input type="number" name="keep" min="1" max="30" step="1" required value="${s.screen_text.keep_days}"></label>
+                </div>
+                <div class="row">
+                  <span class="help">保存中：${state.settings.screen_text_count} 件</span>
+                  <button class="btn btn-sm" type="button" id="ocr-clear" ${state.settings.screen_text_count ? "" : "disabled"}>すべて消す</button>
+                </div>
+              </div>
+              <div class="record-sub" data-when="apps">
+                <h3 class="sub-title">記録しないアプリ</h3>
+                <label class="field"><span>時間だけを記録するアプリ（1 行に 1 つ。例：line.exe）</span>
+                  <textarea name="excluded" rows="4">${esc(s.excluded_apps.join("\n"))}</textarea></label>
+              </div>
+            </div>
           </div>
-          <div class="row">
-            <span class="help">保存中：${state.settings.screen_text_count} 件</span>
-            <button class="btn btn-sm" type="button" id="ocr-clear" ${state.settings.screen_text_count ? "" : "disabled"}>すべて消す</button>
-            <span class="spacer"></span>
-            <button class="btn btn-primary" type="submit">保存</button>
-          </div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>記録しないアプリ</h2></div>
-        <form id="exclude-form">
-          <label class="field"><span>時間だけを記録するアプリ（1 行に 1 つ。例：line.exe）</span>
-            <textarea name="apps" rows="4">${esc(s.excluded_apps.join("\n"))}</textarea></label>
-          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="submit">保存</button></div>
-        </form>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>コミットの通知</h2></div>
-        <form id="git-form">
-          ${toggle("enabled", "コミットしていない変更を通知する", s.git_notify.enabled)}
-          <label class="field"><span>通知までの時間（時間）</span>
-            <input type="number" name="hours" min="0.5" max="24" step="0.5" value="${s.git_notify.hours}"></label>
-          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="submit">保存</button></div>
         </form>
       </section>
 
@@ -1330,152 +1383,130 @@ async function renderSettings({ mode } = {}) {
           <div id="cat-rows">${s.categories.map((c, i) => catRowHTML(c, i, catNames)).join("")}</div>
           <div class="row" style="margin-top:10px">
             <button class="btn" type="button" id="cat-add">＋ 分類を追加</button>
-            <button class="btn btn-ghost" type="button" id="cat-reset">初期値に戻す</button>
             <span class="spacer"></span>
-            <button class="btn btn-primary" type="submit">保存</button>
+            <button class="btn btn-ghost" type="button" id="cat-reset">初期値に戻す</button>
           </div>
         </form>
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>LabLog の更新</h2></div>
-        <p id="update-current">現在のバージョン：確認中…</p>
+        <div class="card-head"><h2>Microsoft アカウント連携</h2></div>
+        <p class="help">連携すると、入退室履歴をスマホからも確認できます。</p>
+        <form id="cloud-form">
+          ${toggle("enabled", "連携する", s.cloud.enabled)}
+          <p class="help" id="cloud-state"></p>
+          <div class="row"><span class="spacer"></span><button class="btn" type="button" id="cloud-export">今すぐ同期</button></div>
+        </form>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>LabLog について</h2></div>
+        <p id="update-current">バージョン：確認中…</p>
         <form id="update-form">
           <label class="check"><input type="radio" name="channel" value="stable" ${s.update.channel === "stable" ? "checked" : ""}>
             <span><b>安定版</b><br><span class="help">正式なバージョンだけを受け取ります。</span></span></label>
           <label class="check"><input type="radio" name="channel" value="beta" ${s.update.channel === "beta" ? "checked" : ""}>
             <span><b>ベータ版</b><br><span class="help">公開前のバージョンも受け取ります。</span></span></label>
-          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="submit">更新を確認</button></div>
+          <div class="row"><span class="spacer"></span><button class="btn btn-primary" type="button" id="update-check">更新を確認</button></div>
         </form>
         <div id="update-result"></div>
-      </section>
-
-      <section class="card">
-        <div class="card-head"><h2>データの保存場所</h2></div>
+        <div class="list-title">データの保存場所</div>
         <p><code>${esc(dataDir)}</code></p>
       </section>
     </div>`;
-
-  api.get("/api/ollama").catch(() => ({ running: false })).then((o) => {
-    const el = $("#ollama-state");
-    if (!el) return;
-    if (!s.ollama.enabled) {
-      el.innerHTML = "";
-    } else if (!o.running) {
-      el.innerHTML = `<span class="tag warn">Ollama が起動していません</span>`;
-    } else if (!o.model_ready) {
-      el.innerHTML = `<span class="tag warn">モデルがありません</span> 「初期設定をやり直す」からダウンロードできます。`;
-    } else {
-      el.innerHTML = `<span class="tag">準備完了</span>`;
-    }
-  });
+  restoreDraft(draft);
+  syncSettingsSections();
+  ["#judge-form", "#record-form", "#ollama-form"].forEach((id) => $(id).addEventListener("change", syncSettingsSections));
+  loadOllamaState();
   loadCloudState();
   loadUpdateState();
-  $("#update-form").addEventListener("submit", (e) => { e.preventDefault(); checkUpdate(e.target.channel.value); });
-  $("#cloud-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (await saveSettings({ cloud: { ...s.cloud, enabled: e.target.enabled.checked } })) loadCloudState();
-  });
+
+  // ---- すぐ保存する
+  const cur = () => state.settings.settings;
+  autoSave($("#ollama-form"), (f) => ({ ollama: { ...cur().ollama, enabled: f.enabled.checked, model: f.model.value,
+                                                   auto: f.auto.checked } }), loadOllamaState);
+  autoSave($("#judge-form"), (f) => ({
+    presence: { ...cur().presence, mode: f.mode.value, away_min: Number(f.away.value), place: f.place.value },
+    idle_threshold_min: Number(f.idle.value), leave_after_hours: Number(f.leave.value),
+  }), refreshStatus);
+  autoSave($("#record-form"), (f) => ({
+    record: { apps: f.apps.value, files: f.files.checked, git: f.git.checked, recent_files: f.recent.checked },
+    browsers: { chrome: f.chrome.checked, edge: f.edge.checked },
+    claude_code: { enabled: f.claude.checked },
+    screen_text: { enabled: f.ocr.checked, apps: lines(f.ocr_apps.value),
+                   interval_min: Number(f.interval.value), keep_days: Number(f.keep.value) },
+    excluded_apps: lines(f.excluded.value),
+    git_notify: { enabled: f.notify.checked, hours: Number(f.notify_hours.value) },
+  }));
+  autoSave($("#cloud-form"), (f, input) => {
+    // 解除すると OneDrive の記録を消すので、確かめる（やめたらスイッチを戻す）
+    if (cur().cloud.enabled && !input.checked && !confirm(UNLINK_CONFIRM)) { input.checked = true; return null; }
+    return { cloud: { ...cur().cloud, enabled: input.checked } };
+  }, () => loadCloudState());
+  autoSave($("#update-form"), (f) => ({ update: { ...cur().update, channel: f.channel.value } }));
+  const categories = () => $$("#cat-rows .cat-edit").map((row) => ({
+    name: $("[name=name]", row).value.trim(),
+    apps: lines($("[name=apps]", row).value),
+    domains: lines($("[name=domains]", row).value),
+    titles: lines($("[name=titles]", row).value),
+  })).filter((c) => c.name);
+  autoSave($("#cat-form"), () => ({ categories: categories() }));
+
+  // ---- そのほかの操作
+  $("#update-check").addEventListener("click", () => checkUpdate($("#update-form").channel.value));
   $("#cloud-export").addEventListener("click", async () => {
     await api.post("/api/cloud/export").catch((err) => alert(err.message));
     flash("同期しました");
     setTimeout(loadCloudState, 3000);
   });
-  const judge = $("#judge-form");
-  judge.addEventListener("change", (e) => {
-    if (e.target.name !== "mode") return;
-    $$("[data-modes]").forEach((el) => { el.hidden = !el.dataset.modes.split(" ").includes(judge.mode.value); });
-  });
   $$("[data-wifi-register]").forEach((b) => b.addEventListener("click", async () => {
     await api.post("/api/wifi/register", { kind: b.dataset.wifiRegister }).catch((e) => alert(e.message));
     flash("登録しました");
-    renderSettings({ mode: judge.mode.value });
+    renderSettings({ keep: true });
     refreshStatus();
   }));
   $$("[data-wifi-remove]").forEach((b) => b.addEventListener("click", async () => {
     await api.post("/api/wifi/remove", { kind: b.dataset.wifiRemove, ssid: b.dataset.ssid });
-    renderSettings({ mode: judge.mode.value });
+    renderSettings({ keep: true });
   }));
   $$("[data-folder-remove]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm(`監視をやめます：\n${b.dataset.folderRemove}`)) return;
     await api.post("/api/folders/remove", { path: b.dataset.folderRemove });
-    await loadSettings();
-    renderSettings();
+    renderSettings({ keep: true });
   }));
+  const addFolder = async (path) => {
+    await api.post("/api/folders/add", { path });
+    flash("フォルダを追加しました");
+    $("#record-form").folder_path.value = "";
+    await renderSettings({ keep: true });
+    renderNotices();
+    // 見つかった Git リポジトリは少し後に分かるので、出し直す
+    setTimeout(() => { if (location.hash === "#/settings") renderSettings({ keep: true }); }, 4000);
+  };
   $("#folder-pick").addEventListener("click", async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true;
     btn.textContent = "フォルダ選択画面を開いています…";
     try {
       const { path } = await api.post("/api/folders/pick");
-      if (path) {
-        await api.post("/api/folders/add", { path });
-        flash("フォルダを追加しました");
-        await loadSettings();
-        renderNotices();
-        setTimeout(renderSettings, 4000);
-        renderSettings();
-      }
+      if (path) await addFolder(path);
     } catch (err) { alert(err.message); }
     finally { btn.disabled = false; btn.textContent = "フォルダを選んで追加…"; }
   });
-  $("#folder-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    try {
-      await api.post("/api/folders/add", { path: e.target.path.value });
-      flash("フォルダを追加しました");
-      await loadSettings();
-      renderNotices();
-      renderSettings();
-    } catch (err) { alert(err.message); }
-  });
-  $("#record-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const ok = await saveSettings({
-      record: { apps: f.apps.value, files: f.files.checked, git: f.git.checked, recent_files: f.recent.checked },
-      browsers: { chrome: f.chrome.checked, edge: f.edge.checked },
-      claude_code: { enabled: f.claude.checked },
-      screen_text: { ...s.screen_text, enabled: f.ocr.checked },
-    });
-    if (ok) renderSettings();
-  });
-  $("#git-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    saveSettings({ git_notify: { enabled: e.target.enabled.checked, hours: Number(e.target.hours.value) } });
-  });
-  $("#ollama-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    if (await saveSettings({ ollama: { enabled: f.enabled.checked, url: s.ollama.url, model: f.model.value,
-                                       auto: f.auto.checked } })) renderSettings();
-  });
-  $("#insight-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    if (await saveSettings({ screen_text: { enabled: s.screen_text.enabled, apps: lines(f.apps.value),
-                                            interval_min: Number(f.interval.value), keep_days: Number(f.keep.value) } })) renderSettings();
-  });
+  const pasted = $("#record-form").folder_path;
+  const addPasted = () => addFolder(pasted.value).catch((err) => alert(err.message));
+  $("#folder-add").addEventListener("click", addPasted);
+  pasted.addEventListener("keydown", (e) => { if (e.key === "Enter") addPasted(); });
   $("#ocr-clear").addEventListener("click", async () => {
     if (!confirm("画面から読み取った文字をすべて消します。よろしいですか？")) return;
     await api.post("/api/screen_texts/clear");
     flash("読み取った文字を消しました");
-    renderSettings();
-  });
-  $("#judge-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = e.target;
-    const ok = await saveSettings({ presence: { ...s.presence, mode: f.mode.value, away_min: Number(f.away.value), place: f.place.value },
-      idle_threshold_min: Number(f.idle.value), leave_after_hours: Number(f.leave.value) });
-    if (ok) { renderSettings(); refreshStatus(); }
-  });
-  $("#exclude-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    saveSettings({ excluded_apps: lines(e.target.apps.value) });
+    renderSettings({ keep: true });
   });
   $("#cat-add").addEventListener("click", () => {
     const rows = $("#cat-rows");
     rows.insertAdjacentHTML("beforeend", catRowHTML({ name: "", apps: [], domains: [], titles: [] }, rows.children.length, catNames));
+    $("#cat-rows .cat-edit:last-child [name=name]").focus();
   });
   $("#cat-reset").addEventListener("click", async () => {
     if (!confirm("分類のルールを初期値に戻します。よろしいですか？")) return;
@@ -1484,19 +1515,11 @@ async function renderSettings({ mode } = {}) {
     flash("分類を初期値に戻しました");
     renderSettings();
   });
-  $("#cat-rows").addEventListener("click", (e) => {
+  $("#cat-rows").addEventListener("click", async (e) => {
     const b = e.target.closest("[data-cat-remove]");
-    if (b) b.closest(".cat-edit").remove();
-  });
-  $("#cat-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const categories = $$("#cat-rows .cat-edit").map((row) => ({
-      name: $("[name=name]", row).value.trim(),
-      apps: lines($("[name=apps]", row).value),
-      domains: lines($("[name=domains]", row).value),
-      titles: lines($("[name=titles]", row).value),
-    })).filter((c) => c.name);
-    if (await saveSettings({ categories }, "分類を保存しました")) renderSettings();
+    if (!b) return;
+    b.closest(".cat-edit").remove();
+    await saveSettings({ categories: categories() });
   });
 }
 
@@ -1507,7 +1530,7 @@ async function loadUpdateState() {
   const el = $("#update-current");
   if (!el || !u) return;
   state.serverStarted = u.started;
-  el.innerHTML = `現在のバージョン：<b>${esc(u.current)}</b>${u.installed ? ""
+  el.innerHTML = `バージョン：<b>${esc(u.current)}</b>${u.installed ? ""
     : ` <span class="tag">開発用</span>`}`;
   if (u.job && ["running", "restarting", "error"].includes(u.job.state)) renderUpdateJob(u.job);
 }
@@ -1622,7 +1645,9 @@ function renderSignIn(error) {
   $(".tabs").classList.add("hidden");
   $("#pause").classList.add("hidden");
   $("#status").innerHTML = "";
+  $("#page-top").innerHTML = "";
   $("#notices").innerHTML = "";
+  $("#foot").innerHTML = "";
   view.innerHTML = `<section class="card signin">
       <h1>LabLog</h1>
       <p class="help">PC で連携した Microsoft アカウントでサインインしてください。</p>
@@ -1634,7 +1659,7 @@ function renderSignIn(error) {
 }
 
 function renderFooter() {
-  $("#foot").innerHTML = `${cloud.build ? `<span>画面のバージョン：${esc(cloud.build)}</span>` : ""}
+  $("#foot").innerHTML = `${cloud.build ? `<span>バージョン：${esc(cloud.build)}</span>` : ""}
     ${cloud.dev ? "" : `<button class="btn btn-sm btn-ghost" id="signout">サインアウト</button>`}`;
   const out = $("#signout");
   if (out) out.addEventListener("click", () => {
@@ -1659,6 +1684,7 @@ window.addEventListener("hashchange", route);
     renderFooter();
   }
   await Promise.all([refreshStatus(), cloud ? null : loadSettings().catch(() => null)]);
+  if (state.unlinked) return;
   renderNotices();
   await route();
   setInterval(refreshStatus, cloud ? 60000 : 15000);
