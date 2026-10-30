@@ -99,7 +99,7 @@ a:hover { text-decoration: underline; }
 h1, h2, h3 { margin: 0; font-weight: 650; }
 h2 { font-size: calc(15px * var(--fs)); }
 code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: calc(12.5px * var(--fs));
-       background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+       background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
 .wrap { max-width: 1180px; margin: 0 auto;
         padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); }
 .muted { color: var(--muted); }
@@ -175,12 +175,16 @@ body { padding-top: var(--head-space, 64px); }
   .topbar .clock { margin-left: auto; font-size: calc(17px * var(--fs)); }
   .topbar .tabs a { padding: 4px 10px; }
   .topbar .tools { gap: 2px; }
-  .topbar:not(.compact) .topbar-inner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; row-gap: 4px; }
-  .topbar:not(.compact) .brand { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+  /* 部品はどれも上下の真ん中に。下の段（一時停止中など）があるときだけ 2 段にし、ロゴは 2 段の真ん中に置く */
+  .topbar:not(.compact) .topbar-inner { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto;
+                                        align-items: center; row-gap: 4px; }
+  .topbar:not(.compact) .brand { grid-column: 1; grid-row: 1; }
+  .topbar:not(.compact) .topbar-inner:has(.status:not(:empty)) .brand { grid-row: 1 / span 2; }
   .topbar:not(.compact) .clock { grid-column: 2; grid-row: 1; justify-self: end; }
   .topbar:not(.compact) .tabs { grid-column: 3; grid-row: 1; }
   .topbar:not(.compact) .tools { grid-column: 4; grid-row: 1; }
   .topbar:not(.compact) .status { grid-column: 2 / -1; grid-row: 2; }
+  .topbar:not(.compact) .status:empty { display: none; }
 }
 /* iPhone・iPad（iOS 26）：ページは時計の下から始まり、ページの上の端から約 30pt には iOS が「ぼかし」をかける
    （ページ側からは消せない）。浮いたヘッダーはその範囲より下（32px）に置いて縁をくっきりさせる */
@@ -636,7 +640,6 @@ details.group .inner .list-item { font-size: calc(13px * var(--fs)); padding: 4p
 .settings form > .row:last-child { margin-top: 16px; }
 .settings .switch-row:first-child { padding-top: 4px; }
 .grid.settings { align-items: start; }
-.settings code { overflow-wrap: anywhere; }
 .settings :is([data-modes], [data-when])[hidden] { display: none; }
 .judge-wifi { margin-top: 20px; padding-top: 4px; border-top: 1px solid var(--border); }
 /* 作業内容の記録：左に記録する項目、右にそれぞれの設定（狭い画面では縦に並べる） */
@@ -665,10 +668,32 @@ details.group .inner .list-item { font-size: calc(13px * var(--fs)); padding: 4p
 .tip b { font-weight: 650; }
 .tip .t-row { display: flex; justify-content: space-between; gap: 12px; color: var(--ink-2); }
 .tip .t-row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tip .t-row span:last-child { flex: none; white-space: nowrap; }
 
 .toast-msg {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 14px;
   background: var(--ink); color: var(--page); padding: 8px 16px; border-radius: 8px; font-size: calc(13px * var(--fs));
+}
+.toast-msg button { font: inherit; font-weight: 700; color: var(--accent); background: none; border: 0; padding: 2px 0;
+                    cursor: pointer; white-space: nowrap; }
+
+/* 処理中：画面の上に細い帯を流す（body.loading）。画面の切り替え中は、前の画面を薄くする（body.navigating）。
+   押したボタンには回る印（.busy）を付け、終わるまで押せないようにする */
+body::after { content: ""; position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat; background-size: 40% 100%;
+  opacity: 0; transition: opacity .2s; }
+body.loading::after { opacity: 1; animation: loading-bar 1.1s linear infinite; }
+@keyframes loading-bar { from { background-position: -60% 0; } to { background-position: 160% 0; } }
+body.navigating #view { opacity: .55; transition: opacity .15s; }
+:is(.btn, .icon-btn, .choice, .seg-btn).busy { pointer-events: none; }
+.btn.busy:not(.btn-icon)::before { content: ""; display: inline-block; width: .85em; height: .85em; margin-right: .45em;
+  vertical-align: -.1em; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+  animation: spin .7s linear infinite; }
+.btn-icon.busy svg { animation: spin .8s linear infinite; }
+.icon-btn.busy { opacity: .4; }
+@media (prefers-reduced-motion: reduce) {
+  body.loading::after { animation: none; background-size: 100% 100%; }
 }
 
 /* ---- 作業量の演出 ----

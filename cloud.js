@@ -288,8 +288,15 @@ window.LabLogCloud = (() => {
     } catch { /* 通信できないときは次の機会に */ }
   }
 
+  // PC が取り込み済みのもの（書き出された内容に同じものがある）は重ねない（二重に出さない）
+  const sameTime = (a, b) => a != null && b != null && Math.abs(a - b) < 1;
+  const alreadyIn = (day, e) => (e.type === "report" ? day.report && day.report.text === e.text
+    : e.type === "stay_save" ? day.stays.some((s) => (e.id == null || s.id === e.id) && sameTime(s.start, e.start)
+                                                     && (e.end == null || sameTime(s.end, e.end)))
+    : e.type === "stay_delete" ? !day.stays.some((s) => s.id === e.id) : false);
+
   function applyPending(day) {
-    const edits = pendingEdits().filter((e) => e.date === day.date);
+    const edits = pendingEdits().filter((e) => e.date === day.date && !alreadyIn(day, e));
     for (const e of edits) {
       if (e.type === "report") {
         day.report = { text: e.text, edited: 1, generated_ts: null, source: "user", pending: true };
@@ -328,6 +335,7 @@ window.LabLogCloud = (() => {
 
   async function getDay(date) {
     const [meta, data] = await Promise.all([read("meta.json"), read(`days/${date}.json`)]);
+    await checkPending(meta); // 取り込み済みの修正を、反映待ちの一覧から外す
     const day = data ? structuredClone(data) : emptyDay(date, meta);
     day.is_today = date === today();
     if (meta && meta.exported > day.range[0]) day.now = Math.min(meta.exported, day.range[1]);
@@ -350,6 +358,14 @@ window.LabLogCloud = (() => {
     if (!start || Number.isNaN(start) || Number.isNaN(end)) throw new Error("時刻の形式が正しくありません");
     if (end != null && end <= start) throw new Error("退室は入室より後の時刻にしてください");
     if (body.id == null && end == null) throw new Error("追加するときは退室時刻も入れてください");
+    // PC と同じ確かめ（presence.py の save_stay）。PC で受け付けられない修正は、ここで止める
+    const now = Date.now() / 1000;
+    if (start > now || (end != null && end > now)) throw new Error("これからの時刻は入れられません");
+    const day = await getDay(body.date);
+    const until = end ?? now;
+    if (day.stays.some((s) => s.id !== body.id && start < (s.state === "in" ? now : s.end) && s.start < until)) {
+      throw new Error("ほかの入退室と重なっています");
+    }
     await submitEdit({ type: "stay_save", id: body.id, start, end, date: body.date });
   }
 

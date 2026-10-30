@@ -22,17 +22,47 @@ async function toJson(res) {
   }
   return data;
 }
+// ---- 処理中の印：通信が少し長くかかったら、画面の上に細い帯を流す（自動の更新では出さない：quiet）。
+// ボタンを押してすぐ始まった通信は、終わるまでそのボタンに回る印を付け、二重に押せないようにする
+let pending = 0, barTimer = null, pressed = null;
+const busyCount = new WeakMap();
+document.addEventListener("click", (e) => {
+  pressed = e.target.closest("button, a.btn");
+  setTimeout(() => { pressed = null; }, 0); // 押した処理の中で（最初の待ちより前に）始まった通信だけ
+}, true);
+function track(promise, quiet = false) {
+  const btn = pressed;
+  let btnTimer = null;
+  if (btn) {
+    busyCount.set(btn, (busyCount.get(btn) || 0) + 1);
+    btnTimer = setTimeout(() => btn.classList.add("busy"), 120); // すぐ終わるときは出さない
+  }
+  if (!quiet && pending++ === 0) barTimer = setTimeout(() => document.body.classList.add("loading"), 250);
+  return promise.finally(() => {
+    if (btn) {
+      clearTimeout(btnTimer);
+      const n = busyCount.get(btn) - 1;
+      busyCount.set(btn, n);
+      if (n <= 0) btn.classList.remove("busy");
+    }
+    if (!quiet && --pending === 0) {
+      clearTimeout(barTimer);
+      document.body.classList.remove("loading");
+    }
+  });
+}
+
 const api = cloud ? {
-  get: cloud.api.get,
+  get: (path, { quiet } = {}) => track(cloud.api.get(path), quiet),
   // 直した内容は PC が取り込むまで「反映待ち」になるので、上部のお知らせも出し直す
-  post: (path, body) => cloud.api.post(path, body).then((res) => { refreshStatus(); return res; }),
+  post: (path, body) => track(cloud.api.post(path, body)).then((res) => { refreshStatus(); return res; }),
 } : {
-  get: (path) => fetch(path, { cache: "no-store" }).then(toJson),
-  post: (path, body) => fetch(path, {
+  get: (path, { quiet } = {}) => track(fetch(path, { cache: "no-store" }).then(toJson), quiet),
+  post: (path, body) => track(fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-LabLog": "1" },
     body: JSON.stringify(body || {}),
-  }).then(toJson),
+  }).then(toJson)),
 };
 
 // ------------------------------------------------------------ 書式
@@ -42,6 +72,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => (
 
 function fmtDur(sec) {
   const m = Math.round((sec || 0) / 60);
+  if (sec > 0 && m === 0) return "1分未満";
   const h = Math.floor(m / 60), r = m % 60;
   if (h && r) return `${h}時間${r}分`;
   if (h) return `${h}時間`;
@@ -100,12 +131,21 @@ function fmtWhen(ts) {
 function safeHref(url) {
   return /^(https?|file):/i.test(url) ? esc(url) : "#";
 }
-function flash(msg) {
+// action：{ label, run }。付けたときは長めに出し、押せるようにする
+function flash(msg, action = null) {
+  $$(".toast-msg").forEach((t) => t.remove());
   const el = document.createElement("div");
   el.className = "toast-msg";
   el.textContent = msg;
+  if (action) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = action.label;
+    b.addEventListener("click", () => { el.remove(); action.run(); });
+    el.append(b);
+  }
   document.body.append(el);
-  setTimeout(() => el.remove(), 2600);
+  setTimeout(() => el.remove(), action ? 7000 : 2600);
 }
 
 // ---- 作業量の演出：その日の作業時間で、背景（壁紙）とカードを少しずつ豪華にする（style.css）
@@ -248,7 +288,8 @@ function presenceInfoHTML() {
   if (s.remote) parts.push("リモートデスクトップで接続中");
   if (mode === "wifi") {
     parts.push(s.ssids && s.ssids.length
-      ? `Wi-Fi：${esc(s.ssids.join(", "))}${NET_LABEL[s.net] ? `（${NET_LABEL[s.net]}）` : ""}` : "Wi-Fi：未接続");
+      ? `Wi-Fi：${esc(s.ssids.join(", "))}${NET_LABEL[s.net] ? `（${NET_LABEL[s.net]}）` : ""}`
+      : s.wifi_error ? "Wi-Fi：読み取れません" : "Wi-Fi：未接続");
   } else {
     parts.push(PRESENCE_LABEL[mode] || "");
   }
@@ -308,7 +349,7 @@ function versionLess(a, b) {
 
 async function refreshStatus() {
   try {
-    state.status = await api.get("/api/status");
+    state.status = await api.get("/api/status", { quiet: true });
     renderStatus();
   } catch (e) {
     // ビューアー：PC で連携を解除した → サインアウトする。ほかはサーバー再起動中など（次の更新で戻る）
@@ -321,6 +362,11 @@ async function refreshStatus() {
 }
 
 const UNLINK_CONFIRM = "連携を解除します。OneDrive 上の LabLog の記録を削除し、スマホ版からサインアウトします。よろしいですか？";
+// この PC が OneDrive に書き出しているか（解除すると記録を消すのはこのときだけ。cloud.py の unlink）
+async function isLinked() {
+  const c = await api.get("/api/cloud", { quiet: true }).catch(() => null);
+  return !!(c && c.enabled && c.folder && !c.blocked_by);
+}
 
 $("#pause").addEventListener("click", async () => {
   if (cloud) { // ビューアーでは「更新」ボタン：画面のファイルごと読み直す（ホーム画面アプリには再読み込みがないため）
@@ -496,6 +542,12 @@ function setTab(name) {
   $$("[data-tab]").forEach((a) => a.classList.toggle("active", a.dataset.tab === name));
 }
 
+// いま開いている画面（day / month / settings / setup）
+const currentPage = () => {
+  const page = (location.hash || "#/day").split("/")[1];
+  return ["month", "settings", "setup"].includes(page) ? page : "day";
+};
+
 async function route() {
   clearTimeout(state.refreshTimer);
   state.tips = [];
@@ -508,6 +560,8 @@ async function route() {
     return;
   }
   renderNotices(); // 初期設定の画面ではお知らせを出さないので、画面を切り替えるたびに描き直す
+  const nav = (state.nav = (state.nav || 0) + 1);
+  const navTimer = setTimeout(() => document.body.classList.add("navigating"), 120);
   try {
     if (page === "setup" && !cloud) { setTab(""); setLevel(0); await renderSetup(); }
     else if (page === "month") { setTab("month"); await renderMonth(arg); }
@@ -520,17 +574,23 @@ async function route() {
       return;
     }
     view.innerHTML = `<div class="card"><b>読み込めませんでした</b><p class="muted">${esc(e.message)}</p></div>`;
+  } finally {
+    if (state.nav === nav) { // 続けて切り替えたときは、最後の切り替えが終わるまで薄いまま
+      clearTimeout(navTimer);
+      document.body.classList.remove("navigating");
+    }
   }
 }
 
 // ------------------------------------------------------------ 日別
 
-async function renderDay(dateArg, { keepScroll = false } = {}) {
+async function renderDay(dateArg, { keepScroll = false, quiet = false } = {}) {
   const today = (state.status && state.status.today) || isoDate(new Date());
   const date = dateArg || today;
   const hash = location.hash;
-  const day = await api.get(`/api/day?date=${encodeURIComponent(date)}`);
-  if (location.hash !== hash) return; // 読み込みを待つあいだに、別の日・別の画面に移った（古い日の内容で上書きしない）
+  const day = await api.get(`/api/day?date=${encodeURIComponent(date)}`, { quiet });
+  // 読み込みを待つあいだに別の日・別の画面に移った、またはほかの画面を開いている（古い日の内容で上書きしない）
+  if (location.hash !== hash || currentPage() !== "day") return;
   const scrollY = window.scrollY;
   state.tips = [];
   const names = day.category_names;
@@ -623,13 +683,14 @@ async function renderDay(dateArg, { keepScroll = false } = {}) {
     openStayForm(day, day.stays.find((s) => s.id === Number(b.dataset.editStay)))));
   if (keepScroll) window.scrollTo(0, scrollY);
 
+  clearTimeout(state.refreshTimer); // 入室ボタンなどで描き直したときも、更新のタイマーは 1 つだけにする
   if (day.is_today) {
     state.refreshTimer = setTimeout(() => {
       const editing = document.activeElement && ["TEXTAREA", "INPUT"].includes(document.activeElement.tagName);
       if (editing || state.reportEditing || state.reportBusy || $("#stay-form")) {
-        state.refreshTimer = setTimeout(() => renderDay(dateArg, { keepScroll: true }), 60000);
+        state.refreshTimer = setTimeout(() => renderDay(dateArg, { keepScroll: true, quiet: true }), 60000);
       } else {
-        renderDay(dateArg, { keepScroll: true }).catch(() => {});
+        renderDay(dateArg, { keepScroll: true, quiet: true }).catch(() => {});
       }
     }, 60000);
   }
@@ -893,7 +954,8 @@ function gitHTML(day) {
     const hours = state.settings ? state.settings.settings.git_notify.hours : 2;
     const now = Date.now() / 1000;
     parts.push(`<h3 class="inner-title">いまの状態</h3><div class="list">${repos.map((r) => {
-      const since = r.last_commit_ts ? fmtDur(now - r.last_commit_ts) + "前" : "コミットなし";
+      const ago = now - (r.last_commit_ts || 0);
+      const since = !r.last_commit_ts ? "コミットなし" : ago >= 48 * HOUR ? `${Math.floor(ago / (24 * HOUR))}日前` : `${fmtDur(ago)}前`;
       const from = Math.max(r.dirty_since || now, r.last_commit_ts || 0);
       const late = r.dirty_files && now - from >= hours * HOUR;
       const dirty = r.dirty_files
@@ -1017,6 +1079,7 @@ window.addEventListener("resize", () => { const ta = $("#report-text"); if (ta) 
 
 function renderReport(day, { editing = false } = {}) {
   const card = $("#report-card");
+  if (!card) return; // 日報を作っているあいだに、ほかの画面に移った
   const r = day.report;
   const text = (r && r.text) || "";
   state.reportEditing = editing;
@@ -1027,7 +1090,7 @@ function renderReport(day, { editing = false } = {}) {
     : `${cloud ? "" : `<button class="btn" id="report-gen">自動生成</button>`}
        <button class="btn ${text ? "" : "btn-primary"}" id="report-edit">${text ? "編集" : "書く"}</button>`;
   const body = editing
-    ? `<textarea id="report-text" class="note" placeholder="今日やったことをメモできます。「## 見出し」「- 箇条書き」のように書くと、整えて表示します。">${esc(text)}</textarea>`
+    ? `<textarea id="report-text" class="note" placeholder="今日の作業をメモ（「## 見出し」「- 箇条書き」が使えます）">${esc(text)}</textarea>`
     : text ? `<div class="md note">${renderMarkdown(text)}</div>`
     : `<div class="empty">まだありません。</div>`;
   card.innerHTML = `
@@ -1040,6 +1103,10 @@ function renderReport(day, { editing = false } = {}) {
     fitTextarea(ta);
     ta.focus();
     ta.addEventListener("input", () => { state.reportDirty = true; save.disabled = false; fitTextarea(ta); });
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !save.disabled) { e.preventDefault(); save.click(); }
+      if (e.key === "Escape") { e.preventDefault(); $("#report-cancel").click(); }
+    });
     $("#report-cancel").addEventListener("click", () => {
       if (state.reportDirty && !confirm("書きかけの内容を捨てて戻ります。よろしいですか？")) return;
       renderReport(day);
@@ -1087,7 +1154,7 @@ async function renderMonth(monthArg) {
   const month = monthArg || today.slice(0, 7);
   const hash = location.hash;
   const m = await api.get(`/api/month?month=${encodeURIComponent(month)}`);
-  if (location.hash !== hash) return;
+  if (location.hash !== hash || currentPage() !== "month") return;
   const [y, mo] = month.split("-").map(Number);
   const maxStay = Math.max(HOUR, ...m.days.map((d) => d.stay));
   const lead = (new Date(y, mo - 1, 1).getDay() + 6) % 7; // 月曜始まり
@@ -1096,8 +1163,8 @@ async function renderMonth(monthArg) {
   for (let i = 0; i < lead; i++) cells.push(`<div class="cell blank"></div>`);
   for (const d of m.days) {
     const n = Number(d.date.slice(8));
-    const tipHtml = `<b>${esc(d.date)}</b>`
-      + (d.stay ? `<div>研究室 ${fmtHM(d.first_in)}〜${fmtHM(d.last_out)}（${fmtDur(d.stay)}）</div>` : `<div>研究室：なし</div>`)
+    const tipHtml = `<b>${mo}月${n}日（${"日月火水木金土"[new Date(y, mo - 1, n).getDay()]}）</b>`
+      + (d.stay ? `<div>研究室 ${fmtHM(d.first_in)}〜${fmtHM(d.last_out)}（${fmtDur(d.stay)}）</div>` : `<div>入室なし</div>`)
       + `<div>PC作業 ${fmtDur(d.work)}</div>`
       + Object.entries(d.by_location).filter(([, v]) => v >= 60).map(([k, v]) => `<div class="t-row"><span>${esc(placeName(k))}</span><span>${fmtDur(v)}</span></div>`).join("");
     cells.push(`<a class="cell ${d.date === today ? "today" : ""}" href="#/day/${d.date}" ${tipAttr(tipHtml)}>
@@ -1109,9 +1176,9 @@ async function renderMonth(monthArg) {
   }
   view.innerHTML = `
     <div class="page-head">
-      <a class="btn btn-ghost" href="#/month/${addMonths(month, -1)}" aria-label="前の月">‹</a>
+      <a class="btn btn-ghost day-nav" href="#/month/${addMonths(month, -1)}" aria-label="前の月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></a>
       <h1>${y}年${mo}月</h1>
-      <a class="btn btn-ghost" href="#/month/${addMonths(month, 1)}" aria-label="次の月">›</a>
+      <a class="btn btn-ghost day-nav" href="#/month/${addMonths(month, 1)}" aria-label="次の月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a>
       <span class="spacer"></span>
       ${cloud ? `<button class="btn" id="csv">CSV で書き出す</button>`
         : `<a class="btn" href="/api/export/stays.csv?month=${esc(month)}">CSV で書き出す</a>`}
@@ -1223,14 +1290,14 @@ function autoSave(form, build, after) {
     const input = e.target;
     if (!input.name || "noSave" in input.dataset) return;
     if (!input.checkValidity()) { input.reportValidity(); return; }
-    const patch = build(form, input);
+    const patch = await build(form, input);
     if (patch && await saveSettings(patch) && after) after(input);
   });
 }
 
 // 日報の AI：入っているモデルから選ぶ（選んでいるモデルが無ければ「未ダウンロード」として残す）
 async function loadOllamaState() {
-  const o = await api.get("/api/ollama").catch(() => ({ running: false, models: [] }));
+  const o = await api.get("/api/ollama", { quiet: true }).catch(() => ({ running: false, models: [] }));
   const f = $("#ollama-form"), el = $("#ollama-state");
   if (!f || !el) return;
   const cur = state.settings.settings.ollama.model;
@@ -1241,7 +1308,8 @@ async function loadOllamaState() {
   };
   f.model.innerHTML = [...new Set([...have, cur])]
     .map((n) => `<option value="${esc(n)}" ${n === cur ? "selected" : ""}>${esc(label(n))}</option>`).join("");
-  el.innerHTML = !o.running ? `<span class="tag warn">Ollama が起動していません</span>`
+  el.innerHTML = !o.installed ? `<span class="tag warn">Ollama が入っていません</span> 「初期設定をやり直す」から入れられます。`
+    : !o.running ? `<span class="tag warn">Ollama が起動していません</span>`
     : !o.model_ready ? `<span class="tag warn">モデルがありません</span> 「初期設定をやり直す」からダウンロードできます。`
     : `<span class="tag">準備完了</span>`;
 }
@@ -1280,7 +1348,7 @@ async function renderSettings({ keep = false } = {}) {
           <div data-when="enabled">
             <label class="field"><span>AI のモデル</span>
               <select name="model"><option value="${esc(s.ollama.model)}">${esc(s.ollama.model)}</option></select></label>
-            <p class="help" id="ollama-state"></p>
+            <p class="help" id="ollama-state">確認中…</p>
           </div>
         </form>
       </section>
@@ -1394,8 +1462,8 @@ async function renderSettings({ keep = false } = {}) {
         <p class="help">連携すると、入退室履歴をスマホからも確認できます。</p>
         <form id="cloud-form">
           ${toggle("enabled", "連携する", s.cloud.enabled)}
-          <p class="help" id="cloud-state"></p>
-          <div class="row"><span class="spacer"></span><button class="btn" type="button" id="cloud-export">今すぐ同期</button></div>
+          <p class="help" id="cloud-state">${s.cloud.enabled ? "確認中…" : ""}</p>
+          <div class="row" data-when="enabled"><span class="spacer"></span><button class="btn" type="button" id="cloud-export">今すぐ同期</button></div>
         </form>
       </section>
 
@@ -1416,7 +1484,7 @@ async function renderSettings({ keep = false } = {}) {
     </div>`;
   restoreDraft(draft);
   syncSettingsSections();
-  ["#judge-form", "#record-form", "#ollama-form"].forEach((id) => $(id).addEventListener("change", syncSettingsSections));
+  ["#judge-form", "#record-form", "#ollama-form", "#cloud-form"].forEach((id) => $(id).addEventListener("change", syncSettingsSections));
   loadOllamaState();
   loadCloudState();
   loadUpdateState();
@@ -1438,9 +1506,9 @@ async function renderSettings({ keep = false } = {}) {
     excluded_apps: lines(f.excluded.value),
     git_notify: { enabled: f.notify.checked, hours: Number(f.notify_hours.value) },
   }));
-  autoSave($("#cloud-form"), (f, input) => {
-    // 解除すると OneDrive の記録を消すので、確かめる（やめたらスイッチを戻す）
-    if (cur().cloud.enabled && !input.checked && !confirm(UNLINK_CONFIRM)) { input.checked = true; return null; }
+  autoSave($("#cloud-form"), async (f, input) => {
+    // この PC が書き出しているときは、解除すると OneDrive の記録を消すので、確かめる（やめたらスイッチを戻す）
+    if (!input.checked && await isLinked() && !confirm(UNLINK_CONFIRM)) { input.checked = true; return null; }
     return { cloud: { ...cur().cloud, enabled: input.checked } };
   }, () => loadCloudState());
   autoSave($("#update-form"), (f) => ({ update: { ...cur().update, channel: f.channel.value } }));
@@ -1518,15 +1586,32 @@ async function renderSettings({ keep = false } = {}) {
   $("#cat-rows").addEventListener("click", async (e) => {
     const b = e.target.closest("[data-cat-remove]");
     if (!b) return;
-    b.closest(".cat-edit").remove();
-    await saveSettings({ categories: categories() });
+    const row = b.closest(".cat-edit");
+    const index = $$("#cat-rows .cat-edit").indexOf(row);
+    const name = $("[name=name]", row).value.trim();
+    row.remove();
+    if (!name) return; // 名前をまだ入れていない行は、保存されていない
+    try {
+      await api.post("/api/settings", { categories: categories() });
+      await loadSettings();
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+    const gone = { name, apps: lines($("[name=apps]", row).value), domains: lines($("[name=domains]", row).value),
+                   titles: lines($("[name=titles]", row).value) };
+    flash(`「${name}」を消しました`, { label: "元に戻す", run: async () => {
+      const list = state.settings.settings.categories;
+      list.splice(Math.min(index, list.length), 0, gone);
+      if (await saveSettings({ categories: list }, "元に戻しました") && location.hash === "#/settings") renderSettings({ keep: true });
+    } });
   });
 }
 
 // ------------------------------------------------------------ 更新（設定の画面の「LabLog の更新」）
 
 async function loadUpdateState() {
-  const u = await api.get("/api/update").catch(() => null);
+  const u = await api.get("/api/update", { quiet: true }).catch(() => null);
   const el = $("#update-current");
   if (!el || !u) return;
   state.serverStarted = u.started;
@@ -1582,7 +1667,7 @@ function renderUpdateJob(job) {
     <div class="progress ${pct == null ? "busy" : ""}"><i style="width:${pct ?? 0}%"></i></div>`;
   if (job.state === "restarting") { waitForRestart(); return; }
   if (job.state === "running") {
-    setTimeout(async () => { const u = await api.get("/api/update").catch(() => null); if (u) renderUpdateJob(u.job); }, 1000);
+    setTimeout(async () => { const u = await api.get("/api/update", { quiet: true }).catch(() => null); if (u) renderUpdateJob(u.job); }, 1000);
   }
 }
 
@@ -1591,7 +1676,7 @@ function renderUpdateJob(job) {
 async function waitForRestart() {
   for (let i = 0; i < 180; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    const u = await api.get("/api/update").catch(() => null);
+    const u = await api.get("/api/update", { quiet: true }).catch(() => null);
     if (u && u.started !== state.serverStarted) { location.reload(); return; }
   }
   const out = $("#update-result");
@@ -1599,11 +1684,13 @@ async function waitForRestart() {
 }
 
 async function loadCloudState() {
-  const c = await api.get("/api/cloud").catch(() => null);
+  const c = await api.get("/api/cloud", { quiet: true }).catch(() => null);
   const el = $("#cloud-state");
   if (!el || !c) return;
   const viewer = c.viewer_url
     ? `<a href="${safeHref(c.viewer_url)}" target="_blank" rel="noopener noreferrer">${esc(c.viewer_url)}</a>` : "";
+  const who = c.account ? `<div>この PC の OneDrive：<b>${esc(c.account)}</b></div>`
+    : `<div><span class="tag warn">個人用の OneDrive がありません</span> この PC の OneDrive に、個人の Microsoft アカウントでサインインしてください。</div>`;
   if (!c.enabled) {
     el.innerHTML = "";
   } else if (c.blocked_by) {
@@ -1620,9 +1707,9 @@ async function loadCloudState() {
   } else if (c.last_error) {
     el.innerHTML = `<span class="tag warn">書き出せませんでした</span> ${esc(c.last_error)}`;
   } else if (!c.folder) {
-    el.innerHTML = `<span class="tag warn">サインイン待ち</span> スマホで下のページを開き、Microsoft アカウントでサインインしてください。<br>${viewer}`;
+    el.innerHTML = `${who}<span class="tag warn">サインイン待ち</span> スマホで下のページを開き、同じアカウントでサインインしてください。<br>${viewer}`;
   } else {
-    el.innerHTML = `<span class="tag">連携中</span> ${c.last_export ? `最終更新 ${fmtWhen(c.last_export)}` : ""}<br>${viewer}`;
+    el.innerHTML = `${who}<span class="tag">連携中</span> ${c.last_export ? `最終更新 ${fmtWhen(c.last_export)}` : ""}<br>${viewer}`;
   }
 }
 

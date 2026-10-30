@@ -261,9 +261,10 @@ async function setupWifi(el) {
   el.innerHTML = `
     <p>研究室の Wi-Fi に接続して「研究室として登録」を押してください。研究室専用と大学共通（ScienceTokyo など）の両方を登録します。</p>
     <p class="help">eduroam・Wi2 は登録しないでください。</p>
-    <p>接続中の Wi-Fi：<b>${esc(current || "なし")}</b>（${where}）</p>
-    ${state.status && state.status.wifi_error ? `<p class="help"><span class="tag warn">Wi-Fi 名を読めません</span>
-      ${esc(state.status.wifi_error)} <a href="ms-settings:privacy-location">位置情報の設定を開く</a></p>` : ""}
+    <p>接続中の Wi-Fi：${state.status && state.status.wifi_error && !current ? "<b>読み取れません</b>"
+      : `<b>${esc(current || "なし")}</b>（${where}）`}</p>
+    ${state.status && state.status.wifi_error ? `<p class="help">${esc(state.status.wifi_error)}
+      <a href="ms-settings:privacy-location">位置情報の設定を開く</a></p>` : ""}
     <div class="row">
       <button class="btn btn-primary" data-wifi="univ" ${current ? "" : "disabled"}>研究室として登録</button>
       <button class="btn" data-wifi="home" ${current ? "" : "disabled"}>自宅として登録</button>
@@ -329,12 +330,13 @@ async function setupAccount(el, a) {
   const url = c.viewer_url || "";
   el.innerHTML = `
     <p>アカウント連携すると、入退室履歴をスマホからも確認できます。</p>
-    <p class="help">個人の Microsoft アカウントと OneDrive が必要です（大学のアカウントは不可）。</p>
+    <p class="help">${c.account ? `この PC の OneDrive（<b>${esc(c.account)}</b>）と同じアカウントで、スマホからサインインします。`
+      : "この PC の OneDrive に、個人の Microsoft アカウントでサインインしておく必要があります（大学のアカウントは不可）。"}</p>
     <div class="choices">
       ${setupChoice("cloud", true, "連携する")}
       ${setupChoice("cloud", false, "連携しない")}
     </div>
-    ${a.cloud && url ? `<p class="help">スマホで <a href="${safeHref(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a> を開き、Microsoft アカウントでサインインしてください。</p>` : ""}`;
+    ${a.cloud && url ? `<p class="help">スマホで <a href="${safeHref(url)}" target="_blank" rel="noopener noreferrer">${esc(url)}</a> を開き、同じアカウントでサインインしてください。</p>` : ""}`;
   bindSetupInputs(el, drawSetupBody);
 }
 
@@ -348,7 +350,7 @@ function setupDone(el, a) {
     const btn = e.currentTarget;
     btn.disabled = true;
     const { settings: cur } = await loadSettings(); // AI の準備でモデルが変わっていることがあるので読み直す
-    if (cur.cloud.enabled && !a.cloud && !confirm(UNLINK_CONFIRM)) { btn.disabled = false; return; }
+    if (!a.cloud && await isLinked() && !confirm(UNLINK_CONFIRM)) { btn.disabled = false; return; }
     const ok = await saveSettings({
       setup_done: true,
       record: { apps: a.apps, files: a.files, git: a.git, recent_files: a.recent },
